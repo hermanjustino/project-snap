@@ -485,13 +485,17 @@ function yearOptionsHtml(selectedYear) {
   return options;
 }
 
+let currentPopupMarker = null;
+
 function showRegionPopup(marker) {
+  currentPopupMarker = marker;
   focusOnPoint(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
     <h3>${marker.label} Fashion Week</h3>
     <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
     <div class="popup-images"><p class="muted">Loading…</p></div>
+    <button class="fit-check-btn">📸 Check My Fit Live</button>
   `;
   popupEl.hidden = false;
 
@@ -559,8 +563,15 @@ function closeLightbox() {
 
 popupEl.addEventListener("click", (e) => {
   const img = e.target.closest(".popup-images img");
-  if (!img) return;
-  openLightbox(img.dataset.full, img.dataset.source, img.alt);
+  if (img) {
+    openLightbox(img.dataset.full, img.dataset.source, img.alt);
+    return;
+  }
+
+  if (e.target.closest(".fit-check-btn") && currentPopupMarker) {
+    const year = popupEl.querySelector(".popup-year")?.value || DEFAULT_YEAR;
+    openFitCheck(currentPopupMarker.label, year);
+  }
 });
 
 lightboxEl.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
@@ -569,6 +580,106 @@ lightboxEl.addEventListener("click", (e) => {
 });
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !lightboxEl.hidden) closeLightbox();
+  if (e.key === "Escape" && !fitCheckPanel.hidden) closeFitCheck();
+});
+
+// --- Live "Style Check": direct browser camera access (getUserMedia, no
+// third-party video API or credentials needed) + Gemini comparison against
+// the fashion-week photos for whatever city/year is currently selected. ---
+const fitCheckPanel = document.getElementById("fitCheckPanel");
+const fitCheckTitle = document.getElementById("fitCheckTitle");
+const fitCheckPublisherEl = document.getElementById("fitCheckPublisher");
+const fitCheckCaptureBtn = document.getElementById("fitCheckCapture");
+const fitCheckResultEl = document.getElementById("fitCheckResult");
+const fitCheckCloseBtn = document.getElementById("fitCheckClose");
+
+let fitCheckStream = null;
+let fitCheckContext = { city: null, year: null };
+
+function dataUrlToBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+async function openFitCheck(city, year) {
+  fitCheckContext = { city, year };
+  fitCheckTitle.textContent = `Style Check — ${city} ${year}`;
+  fitCheckResultEl.hidden = true;
+  fitCheckResultEl.innerHTML = "";
+  fitCheckCaptureBtn.disabled = true;
+  fitCheckCaptureBtn.textContent = "Starting camera…";
+  fitCheckPanel.hidden = false;
+  popupEl.hidden = true; // step out of the way while the camera is up
+
+  try {
+    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+    const videoEl = document.createElement("video");
+    videoEl.autoplay = true;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.style.width = "100%";
+    videoEl.style.height = "100%";
+    videoEl.style.objectFit = "cover";
+    videoEl.srcObject = fitCheckStream;
+    fitCheckPublisherEl.innerHTML = "";
+    fitCheckPublisherEl.appendChild(videoEl);
+
+    fitCheckCaptureBtn.disabled = false;
+    fitCheckCaptureBtn.textContent = "📸 Capture & Score";
+  } catch (err) {
+    fitCheckResultEl.hidden = false;
+    fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
+  }
+}
+
+function closeFitCheck() {
+  fitCheckPanel.hidden = true;
+  fitCheckStream?.getTracks().forEach((track) => track.stop());
+  fitCheckStream = null;
+  fitCheckPublisherEl.innerHTML = "";
+}
+
+fitCheckCloseBtn.addEventListener("click", closeFitCheck);
+
+fitCheckCaptureBtn.addEventListener("click", async () => {
+  const videoEl = fitCheckPublisherEl.querySelector("video");
+  if (!videoEl) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = videoEl.videoWidth || 640;
+  canvas.height = videoEl.videoHeight || 480;
+  canvas.getContext("2d").drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+  const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+  fitCheckResultEl.hidden = false;
+  fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} Fashion Week ${fitCheckContext.year}…</p>`;
+  fitCheckCaptureBtn.disabled = true;
+
+  try {
+    const form = new FormData();
+    form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
+    form.append("city", fitCheckContext.city);
+    form.append("year", fitCheckContext.year);
+
+    const res = await fetch("/api/outfit/fit-check", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Fit check failed");
+
+    fitCheckResultEl.innerHTML = `
+      <h4>${data.fitScore}/100 — ${data.verdict}</h4>
+      <p>${data.reasoning}</p>
+      <p class="muted">Tip: ${data.tip}</p>
+    `;
+  } catch (err) {
+    fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
+  } finally {
+    fitCheckCaptureBtn.disabled = false;
+  }
 });
 
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -580,8 +691,8 @@ let pulseTime = 0;
 function animate() {
   requestAnimationFrame(animate);
 
-  // Stop auto-rotation if a popup is active
-  if (!isDragging && popupEl.hidden) {
+  // Stop auto-rotation if a popup or the fit-check panel is active
+  if (!isDragging && popupEl.hidden && fitCheckPanel.hidden) {
     globeGroup.rotation.y += 0.0015;
   }
 

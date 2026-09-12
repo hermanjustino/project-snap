@@ -39,3 +39,16 @@ export async function searchFashionWeekImages(city, year, limit = 8) {
 
   return { query, images };
 }
+
+/**
+ * Downloads an image (e.g. one of the search results above) and returns it
+ * as base64 + mime type, ready to hand to Gemini as inlineData.
+ */
+export async function fetchImageAsBase64(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch image (${response.status})`);
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const mimeType = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+  return { base64: buffer.toString("base64"), mimeType };
+}

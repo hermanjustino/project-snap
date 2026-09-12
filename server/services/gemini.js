@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import "dotenv/config";
 
 const apiKey = process.env.GEMINI_API_KEY;
-const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 if (!apiKey) {
   console.warn(
@@ -39,13 +39,17 @@ fences) with this exact shape:
   "description": "one sentence description"
 }`;
 
-  const modelInstance = ai.getGenerativeModel({ model });
-  const result = await modelInstance.generateContent([
-    prompt,
-    { inlineData: { mimeType, data: imageBase64 } },
-  ]);
-  const response = await result.response;
-  return extractJson(response.text());
+  const response = await ai.models.generateContent({
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }, { inlineData: { mimeType, data: imageBase64 } }],
+      },
+    ],
+  });
+
+  return extractJson(response.text);
 }
 
 /**
@@ -79,10 +83,47 @@ invent items). Return ONLY a JSON object (no prose, no markdown fences):
 If the wardrobe truly cannot satisfy the request, return an empty itemIds
 array and explain what's missing in stylingNotes.`;
 
-  const modelInstance = ai.getGenerativeModel({ model });
-  const result = await modelInstance.generateContent(prompt);
-  const response = await result.response;
-  return extractJson(response.text());
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+
+  return extractJson(response.text);
+}
+
+/**
+ * Live "Style Check": compare a captured frame (e.g. from a Vonage video
+ * session) against a handful of real Fashion Week reference photos for a
+ * given city/year, and score how well it fits in.
+ */
+export async function rateFitAgainstTrends(selfieBase64, selfieMimeType, referenceImages, city, year) {
+  const prompt = `You are judging how well an outfit fits in with a city's
+current fashion scene. The FIRST image is a person's live outfit, captured
+just now. The remaining ${referenceImages.length} image(s) are real runway/
+street looks from ${city} Fashion Week ${year} — the trends it's being
+compared against.
+
+Rate how well the first outfit would fit in among the reference looks.
+Return ONLY a JSON object (no prose, no markdown fences):
+{
+  "fitScore": 1-100,
+  "verdict": "a short punchy one-line verdict, e.g. 'Runway ready' or 'Not quite ${city} yet'",
+  "reasoning": "2-3 sentences comparing the outfit to what's shown in the reference looks",
+  "tip": "one concrete suggestion to fit in better"
+}`;
+
+  const parts = [
+    { text: prompt },
+    { inlineData: { mimeType: selfieMimeType, data: selfieBase64 } },
+    ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })),
+  ];
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: "user", parts }],
+  });
+
+  return extractJson(response.text);
 }
 
 /**
@@ -102,11 +143,15 @@ fences):
   "oneLiner": "a short, shareable one-line verdict"
 }`;
 
-  const modelInstance = ai.getGenerativeModel({ model });
-  const result = await modelInstance.generateContent([
-    prompt,
-    { inlineData: { mimeType, data: imageBase64 } },
-  ]);
-  const response = await result.response;
-  return extractJson(response.text());
+  const response = await ai.models.generateContent({
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }, { inlineData: { mimeType, data: imageBase64 } }],
+      },
+    ],
+  });
+
+  return extractJson(response.text);
 }

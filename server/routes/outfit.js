@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
-import { rateOutfit, suggestOutfit } from "../services/gemini.js";
+import { rateFitAgainstTrends, rateOutfit, suggestOutfit } from "../services/gemini.js";
+import { fetchImageAsBase64, searchFashionWeekImages } from "../services/imageSearch.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const router = Router();
@@ -37,6 +38,37 @@ router.post("/rate", upload.single("photo"), async (req, res) => {
   } catch (err) {
     console.error("[outfit] rate failed:", err);
     res.status(500).json({ error: "Failed to rate outfit", detail: String(err.message || err) });
+  }
+});
+
+// Live "Style Check": a frame captured from a Vonage video session, scored
+// against real Fashion Week photos for the city/year the visitor is browsing.
+router.post("/fit-check", upload.single("photo"), async (req, res) => {
+  const { city, year } = req.body;
+  if (!req.file) return res.status(400).json({ error: "photo field is required" });
+  if (!city || !year) return res.status(400).json({ error: "city and year fields are required" });
+
+  try {
+    const { images } = await searchFashionWeekImages(city, year, 4);
+
+    const referenceImages = [];
+    for (const img of images.slice(0, 3)) {
+      try {
+        referenceImages.push(await fetchImageAsBase64(img.thumbnailUrl));
+      } catch (err) {
+        console.warn("[outfit] skipping unfetchable reference image:", err.message);
+      }
+    }
+    if (referenceImages.length === 0) {
+      return res.status(502).json({ error: "Couldn't load reference runway photos to compare against — try again." });
+    }
+
+    const selfieBase64 = req.file.buffer.toString("base64");
+    const result = await rateFitAgainstTrends(selfieBase64, req.file.mimetype, referenceImages, city, year);
+    res.json({ ...result, comparedAgainst: referenceImages.length });
+  } catch (err) {
+    console.error("[outfit] fit-check failed:", err);
+    res.status(500).json({ error: "Failed to run fit check", detail: String(err.message || err) });
   }
 });
 

@@ -180,6 +180,64 @@
       font-size: 1.1rem;
       cursor: pointer;
     }
+    .fit-check-btn {
+      display: block;
+      width: 100%;
+      margin-top: 0.9rem;
+      padding: 0.6rem;
+      border: 1px solid #a8452b;
+      border-radius: 8px;
+      background: #a8452b;
+      color: #f8f2e2;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #fitCheckPanel[hidden] { display: none; }
+    #fitCheckPanel {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(35, 30, 20, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1.5rem;
+      color: #f8f2e2;
+      touch-action: pan-y;
+    }
+    #fitCheckPanel h3 { margin: 0; }
+    #fitCheckPublisher {
+      width: min(420px, 90vw);
+      height: min(320px, 60vh);
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #fitCheckActions { display: flex; gap: 0.6rem; }
+    #fitCheckActions button {
+      padding: 0.6rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid #d9c9a3;
+      background: #f8f2e2;
+      color: #4a4130;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    #fitCheckActions button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #fitCheckResult {
+      width: min(420px, 90vw);
+      background: #f8f2e2;
+      color: #4a4130;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      font-size: 0.85rem;
+    }
+    #fitCheckResult h4 { margin: 0 0 0.3rem; font-size: 1.4rem; }
+    #fitCheckResult p { margin: 0.3rem 0 0; color: #4a4130; }
+    #fitCheckResult .muted { color: #8c7f63; }
   </style>
 </head>
 <body>
@@ -200,6 +258,16 @@
     <button class="lightbox-close" aria-label="Close">×</button>
     <img id="lightboxImg" alt="" />
     <a id="lightboxSource" href="#" target="_blank" rel="noopener noreferrer">View original ↗</a>
+  </div>
+
+  <div id="fitCheckPanel" hidden>
+    <button class="lightbox-close" id="fitCheckClose" aria-label="Close">×</button>
+    <h3 id="fitCheckTitle">Style Check</h3>
+    <div id="fitCheckPublisher"></div>
+    <div id="fitCheckActions">
+      <button id="fitCheckCapture">📸 Capture &amp; Score</button>
+    </div>
+    <div id="fitCheckResult" hidden></div>
   </div>
 
   <div class="controls">
