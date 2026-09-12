@@ -8,12 +8,12 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
 const GLOBE_RADIUS = 80;
-const EARTH_TEXTURE_URL = "https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg";
-const GRID_COLOR = "rgba(107, 88, 66, 0.25)";
-const LAND_COLOR = "rgba(183, 161, 121, 0.4)";
-const LAND_STROKE = "rgba(107, 88, 66, 0.4)";
-const DESERT_COLOR = "rgba(227, 213, 184, 0.5)";
-const FOREST_COLOR = "rgba(125, 140, 107, 0.5)";
+const OCEAN_COLOR = "#cdba90";
+const GRID_COLOR = "rgba(107, 88, 66, 0.35)";
+const LAND_COLOR = "#b7a179";
+const LAND_STROKE = "#6b5842";
+const DESERT_COLOR = "#e3d5b8";
+const FOREST_COLOR = "#7d8c6b";
 const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
 
@@ -48,8 +48,8 @@ function generateGlobeTexture(landFeatures) {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
 
-  // Make the background transparent so the Earth map shows through
-  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = OCEAN_COLOR;
+  ctx.fillRect(0, 0, width, height);
 
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = 1;
@@ -125,24 +125,11 @@ const dirLight = new THREE.DirectionalLight(0xf4ead2, 1.2);
 dirLight.position.set(200, 100, 150);
 scene.add(dirLight);
 
-const textureLoader = new THREE.TextureLoader();
-textureLoader.setCrossOrigin("anonymous");
-const earthTexture = textureLoader.load(EARTH_TEXTURE_URL);
-
 const sphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
-const sphereMaterial = new THREE.MeshPhongMaterial({ map: earthTexture, shininess: 8 });
+const initialTexture = generateGlobeTexture();
+const sphereMaterial = new THREE.MeshPhongMaterial({ map: initialTexture, shininess: 8 });
 const globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
 globeGroup.add(globeMesh);
-
-const overlayGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
-const overlayMaterial = new THREE.MeshPhongMaterial({
-  map: generateGlobeTexture(),
-  transparent: true,
-  opacity: 1,
-  shininess: 0,
-});
-const overlayMesh = new THREE.Mesh(overlayGeometry, overlayMaterial);
-globeGroup.add(overlayMesh);
 
 const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 4, 64, 64);
 const atmosphereMaterial = new THREE.MeshBasicMaterial({
@@ -159,9 +146,9 @@ fetch("/data/world_regions.json")
   .then((res) => (res.ok ? res.json() : Promise.reject(new Error("no local world data yet"))))
   .then((landData) => {
     const updatedTexture = generateGlobeTexture(landData);
-    overlayMaterial.map.dispose();
-    overlayMaterial.map = updatedTexture;
-    overlayMaterial.needsUpdate = true;
+    sphereMaterial.map.dispose();
+    sphereMaterial.map = updatedTexture;
+    sphereMaterial.needsUpdate = true;
   })
   .catch(() => {
     /* grid-only globe is the expected default for now */
