@@ -583,7 +583,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !fitCheckPanel.hidden) closeFitCheck();
 });
 
-// --- Live "Style Check": direct browser camera access (getUserMedia, no
+// --- Live "Fit Check": direct browser camera access (getUserMedia, no
 // third-party video API or credentials needed) + Gemini comparison against
 // the fashion-week photos for whatever city/year is currently selected. ---
 const fitCheckPanel = document.getElementById("fitCheckPanel");
@@ -596,6 +596,20 @@ const fitCheckCloseBtn = document.getElementById("fitCheckClose");
 let fitCheckStream = null;
 let fitCheckContext = { city: null, year: null };
 
+// A vibrant, score-driven accent instead of one flat color for every result:
+// low scores read as a warm alert, high scores as a rich, celebratory glow.
+function scoreGradient(score) {
+  if (score >= 70) return "linear-gradient(135deg, #2f9e5c, #c9d84a)";
+  if (score >= 40) return "linear-gradient(135deg, #c98a3b, #e0483a)";
+  return "linear-gradient(135deg, #a8452b, #6b2418)";
+}
+
+function scoreAccent(score) {
+  if (score >= 70) return "#2f9e5c";
+  if (score >= 40) return "#c9752f";
+  return "#a8452b";
+}
+
 function dataUrlToBlob(dataUrl) {
   const [header, base64] = dataUrl.split(",");
   const mime = header.match(/:(.*?);/)[1];
@@ -607,7 +621,7 @@ function dataUrlToBlob(dataUrl) {
 
 async function openFitCheck(city, year) {
   fitCheckContext = { city, year };
-  fitCheckTitle.textContent = `Style Check — ${city} ${year}`;
+  fitCheckTitle.textContent = `Fit Check — ${city} ${year}`;
   fitCheckResultEl.hidden = true;
   fitCheckResultEl.innerHTML = "";
   fitCheckCaptureBtn.disabled = true;
@@ -671,9 +685,12 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
     if (!res.ok) throw new Error(data.error || "Fit check failed");
 
     fitCheckResultEl.innerHTML = `
-      <h4>${data.fitScore}/100 — ${data.verdict}</h4>
-      <p>${data.reasoning}</p>
-      <p class="muted">Tip: ${data.tip}</p>
+      <div class="fit-score-badge" style="background: ${scoreGradient(data.fitScore)}">
+        <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
+      </div>
+      <h4 class="fit-verdict" style="color: ${scoreAccent(data.fitScore)}">${data.verdict}</h4>
+      <p class="fit-reasoning">${data.reasoning}</p>
+      <p class="fit-tip">💡 ${data.tip}</p>
     `;
   } catch (err) {
     fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;

@@ -232,12 +232,36 @@
       background: #f8f2e2;
       color: #4a4130;
       border-radius: 12px;
-      padding: 1rem 1.25rem;
+      padding: 1.25rem;
       font-size: 0.85rem;
+      text-align: center;
     }
-    #fitCheckResult h4 { margin: 0 0 0.3rem; font-size: 1.4rem; }
     #fitCheckResult p { margin: 0.3rem 0 0; color: #4a4130; }
     #fitCheckResult .muted { color: #8c7f63; }
+    .fit-score-badge {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      margin: 0 auto 0.85rem;
+      color: #fff;
+      box-shadow: 0 8px 22px rgba(74, 65, 48, 0.3);
+    }
+    .fit-score-num { font-size: 2.1rem; font-weight: 800; line-height: 1; }
+    .fit-score-max { font-size: 0.85rem; opacity: 0.85; margin-left: 2px; }
+    .fit-verdict { margin: 0 0 0.6rem; font-size: 1.3rem; font-weight: 700; }
+    .fit-reasoning { text-align: left; line-height: 1.5; }
+    .fit-tip {
+      margin: 0.9rem 0 0;
+      padding: 0.65rem 0.85rem;
+      background: #fdf0d5;
+      border-left: 3px solid #c98a3b;
+      border-radius: 6px;
+      text-align: left;
+      color: #6b5842;
+    }
   </style>
 </head>
 <body>
@@ -262,7 +286,7 @@
 
   <div id="fitCheckPanel" hidden>
     <button class="lightbox-close" id="fitCheckClose" aria-label="Close">×</button>
-    <h3 id="fitCheckTitle">Style Check</h3>
+    <h3 id="fitCheckTitle">Fit Check</h3>
     <div id="fitCheckPublisher"></div>
     <div id="fitCheckActions">
       <button id="fitCheckCapture">📸 Capture &amp; Score</button>
