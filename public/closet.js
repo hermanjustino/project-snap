@@ -223,6 +223,37 @@ rateInput.addEventListener("change", async () => {
   }
 });
 
+// --- Biome preparedness bot ---
+const biomeInput = document.getElementById("biomeInput");
+const biomeResult = document.getElementById("biomeResult");
+
+biomeInput.addEventListener("change", async () => {
+  const file = biomeInput.files[0];
+  if (!file) return;
+  biomeResult.style.display = "block";
+  biomeResult.innerHTML = "Assessing your preparedness for extreme biomes…";
+  
+  try {
+    const imageDataUrl = await resizeImageToDataUrl(file);
+    const form = new FormData();
+    form.append("photo", dataUrlToBlob(imageDataUrl), "fit.jpg");
+    // Request specifically for desert and rainforest safety context
+    form.append("context", "Assess this outfit for survival and safety in both arid desert and tropical rainforest environments. Focus on UV protection, heat management, insect protection, and moisture management.");
+
+    const res = await fetch("/api/outfit/rate", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    
+    biomeResult.innerHTML = `
+      <h3>${data.score}/10 — ${data.vibe}</h3>
+      <p><em>${data.oneLiner}</em></p>
+      <p><strong>Environment Fit:</strong> ${(data.highlights || []).join(", ")}</p>
+      <p><strong>Safety Gaps:</strong> ${(data.suggestions || []).join(", ")}</p>`;
+  } catch (err) {
+    biomeResult.innerHTML = `<span class="muted">Error: ${err.message}</span>`;
+  }
+});
+
 // --- Live video session (Vonage Video API) ---
 const startSessionBtn = document.getElementById("startSessionBtn");
 const videoStatus = document.getElementById("videoStatus");

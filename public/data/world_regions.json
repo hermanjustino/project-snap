@@ -164,6 +164,22 @@
     {
       "type": "Feature",
       "properties": {
+        "name": "Sonoran Desert",
+        "type": "Subtropical Desert",
+        "description": "Arid biome in the southwestern US and northwestern Mexico, famous for saguaro cacti."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-116.5, 33.8], [-111.0, 34.0], [-109.0, 31.0], 
+          [-110.5, 27.5], [-113.0, 28.5], [-115.0, 31.5], 
+          [-116.5, 33.8]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "name": "Amazon Rainforest",
         "type": "Tropical Rainforest",
         "area_km2": 5500000
@@ -191,6 +207,70 @@
           [-85.6, 11.0], [-85.0, 10.0], [-83.6, 9.6], 
           [-82.9, 8.2], [-83.6, 8.4], [-84.8, 9.1], 
           [-85.9, 10.1], [-85.6, 11.0]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Great Barrier Reef",
+        "biome": "Marine / Coral Reef",
+        "description": "World's largest coral reef system composed of over 2,900 individual reefs."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [143.5, -10.5], [145.5, -14.5], [147.0, -18.0], 
+          [152.5, -22.5], [153.5, -24.5], [151.5, -24.0], 
+          [149.0, -20.0], [146.0, -16.0], [143.5, -10.5]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Serengeti Ecosystem",
+        "biome": "Tropical & Subtropical Grassland",
+        "description": "Famous East African grassland ecosystem spanning northern Tanzania and southern Kenya."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [34.0, -1.2], [35.5, -1.3], [35.8, -2.5], 
+          [35.3, -3.5], [34.5, -3.2], [33.8, -2.2], 
+          [34.0, -1.2]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Everglades",
+        "biome": "Flooded Grassland & Subtropical Wetland",
+        "description": "Largest subtropical wetland ecosystem in North America."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-81.5, 25.1], [-80.5, 25.2], [-80.3, 26.0], 
+          [-80.8, 26.7], [-81.3, 26.3], [-81.6, 25.7], 
+          [-81.5, 25.1]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pantanal",
+        "biome": "Tropical Freshwater Wetland",
+        "description": "World's largest tropical wetland and flooded grassland area, located mostly within Brazil."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.5, -16.0], [-55.5, -16.2], [-54.8, -19.0], 
+          [-56.5, -22.0], [-58.0, -21.0], [-59.2, -18.5], 
+          [-58.5, -16.0]
         ]]
       }
     }

@@ -14,6 +14,9 @@ const LAND_COLOR = "rgba(183, 161, 121, 0.4)";
 const LAND_STROKE = "rgba(107, 88, 66, 0.4)";
 const DESERT_COLOR = "rgba(227, 213, 184, 0.5)";
 const FOREST_COLOR = "rgba(125, 140, 107, 0.5)";
+const MARINE_COLOR = "rgba(64, 224, 208, 0.6)"; // Turquoise for reefs
+const SAVANNA_COLOR = "rgba(210, 180, 140, 0.6)"; // Tan for grasslands
+const WETLAND_COLOR = "rgba(46, 139, 87, 0.6)"; // Sea green for wetlands
 const BIOME_HOVER_COLOR = "rgba(255, 165, 0, 0.7)"; // Orange highlight
 const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
@@ -27,6 +30,18 @@ const BIOME_ADVICE = {
   forest: {
     title: "Rainforest Safety",
     advice: "Wear breathable, quick-dry clothing treated with permethrin to prevent insect-borne diseases (Malaria/Dengue). Long sleeves and tucked-in pants protect against leeches and thorns. Waterproof boots are a must."
+  },
+  marine: {
+    title: "Marine/Reef Safety",
+    advice: "Wear a UPF 50+ rash guard and swim leggings to protect against intense UV reflection and stinging jellyfish. Use reef-safe sunscreen. Sturdy water shoes protect against sharp coral and stonefish."
+  },
+  savanna: {
+    title: "Savanna/Grassland Safety",
+    advice: "Wear neutral-colored (khaki, tan, olive) clothing to blend in and avoid attracting tsetse flies (which like dark/bright colors). High-top boots and thick socks protect against ticks and tall grass. Layers are key for temperature shifts."
+  },
+  wetland: {
+    title: "Wetland Safety",
+    advice: "Wear waterproof boots and quick-dry, breathable fabrics. High-strength insect repellent and long sleeves are critical to prevent mosquito-borne illnesses. Be cautious of uneven underwater terrain and sharp marsh grasses."
   }
 };
 
@@ -91,7 +106,7 @@ function generateGlobeTexture(landFeatures, hoverUid = null, selectUid = null) {
       if (!geometry) return;
 
       const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
-      const isBiome = type.includes("desert") || type.includes("forest");
+      const isBiome = type.includes("desert") || type.includes("forest") || type.includes("marine") || type.includes("grassland") || type.includes("wetland");
       const uid = feature.properties?.name || feature.properties?.code;
 
       ctx.lineWidth = 1.5;
@@ -105,7 +120,10 @@ function generateGlobeTexture(landFeatures, hoverUid = null, selectUid = null) {
         } else if (uid === hoverUid) {
           ctx.fillStyle = BIOME_HOVER_COLOR; // Orange highlight on hover
         } else {
-          ctx.fillStyle = type.includes("desert") ? DESERT_COLOR : FOREST_COLOR;
+          ctx.fillStyle = type.includes("desert") ? DESERT_COLOR : 
+                          type.includes("forest") ? FOREST_COLOR : 
+                          type.includes("marine") ? MARINE_COLOR : 
+                          type.includes("grassland") ? SAVANNA_COLOR : WETLAND_COLOR;
         }
       } else {
         ctx.fillStyle = LAND_COLOR;
@@ -326,7 +344,7 @@ function raycastBiomes(e) {
     // Check which feature contains this point
     return biomeFeatures.features.find((f) => {
       const type = (f.properties?.type || f.properties?.biome || "").toLowerCase();
-      if (!type.includes("desert") && !type.includes("forest")) return false;
+      if (!type.includes("desert") && !type.includes("forest") && !type.includes("marine") && !type.includes("grassland") && !type.includes("wetland")) return false;
       return isPointInPolygon([lng, lat], f.geometry);
     });
   }
@@ -422,7 +440,10 @@ function showBiomePopup(feature) {
   focusOnPoint(coords[1], coords[0]);
 
   const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
-  const biomeKey = type.includes("desert") ? "desert" : "forest";
+  const biomeKey = type.includes("desert") ? "desert" : 
+                   type.includes("forest") ? "forest" : 
+                   type.includes("marine") ? "marine" : 
+                   type.includes("grassland") ? "savanna" : "wetland";
   const info = BIOME_ADVICE[biomeKey];
 
   popupEl.innerHTML = `

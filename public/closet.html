@@ -18,6 +18,7 @@
     <button data-tab="wardrobe" class="active">Wardrobe</button>
     <button data-tab="stylist">AI Stylist</button>
     <button data-tab="rate">Rate My Fit</button>
+    <button data-tab="biome">Biome Prep</button>
     <button data-tab="live">Live Session</button>
   </nav>
 
@@ -63,6 +64,19 @@
           <input type="file" id="rateInput" accept="image/*" capture="environment" />
         </label>
         <div id="rateResult" class="result" style="display:none"></div>
+      </div>
+    </section>
+
+    <!-- BIOME PREP -->
+    <section id="biome">
+      <div class="card">
+        <h2>Biome Preparedness Bot</h2>
+        <p class="muted">Upload a photo of your planned outfit to see if you're ready for the desert or rainforest.</p>
+        <label class="upload">
+          📷 Check environment readiness
+          <input type="file" id="biomeInput" accept="image/*" capture="environment" />
+        </label>
+        <div id="biomeResult" class="result" style="display:none"></div>
       </div>
     </section>
 
