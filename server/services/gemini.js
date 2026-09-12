@@ -39,20 +39,13 @@ fences) with this exact shape:
   "description": "one sentence description"
 }`;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType, data: imageBase64 } },
-        ],
-      },
-    ],
-  });
-
-  return extractJson(response.text);
+  const modelInstance = ai.getGenerativeModel({ model });
+  const result = await modelInstance.generateContent([
+    prompt,
+    { inlineData: { mimeType, data: imageBase64 } },
+  ]);
+  const response = await result.response;
+  return extractJson(response.text());
 }
 
 /**
@@ -86,12 +79,10 @@ invent items). Return ONLY a JSON object (no prose, no markdown fences):
 If the wardrobe truly cannot satisfy the request, return an empty itemIds
 array and explain what's missing in stylingNotes.`;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-  });
-
-  return extractJson(response.text);
+  const modelInstance = ai.getGenerativeModel({ model });
+  const result = await modelInstance.generateContent(prompt);
+  const response = await result.response;
+  return extractJson(response.text());
 }
 
 /**
@@ -111,18 +102,11 @@ fences):
   "oneLiner": "a short, shareable one-line verdict"
 }`;
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: prompt },
-          { inlineData: { mimeType, data: imageBase64 } },
-        ],
-      },
-    ],
-  });
-
-  return extractJson(response.text);
+  const modelInstance = ai.getGenerativeModel({ model });
+  const result = await modelInstance.generateContent([
+    prompt,
+    { inlineData: { mimeType, data: imageBase64 } },
+  ]);
+  const response = await result.response;
+  return extractJson(response.text());
 }

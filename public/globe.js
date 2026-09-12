@@ -392,19 +392,17 @@ function onClick(e) {
   }
 }
 
-function focusOnPoint(lat, lng, targetZ = 160) {
-  const pos = latLngToVector3(lat, lng, GLOBE_RADIUS, 80);
+function focusOnPoint(lat, lng, targetZ = 150) {
+  // Calculate the target position based on Lat/Lng
+  const pos = latLngToVector3(lat, lng, GLOBE_RADIUS, targetZ - GLOBE_RADIUS);
   
-  // Simple linear transition for camera position
   const startPos = camera.position.clone();
-  const duration = 1000;
+  const duration = 1200;
   const startTime = performance.now();
 
   function updateCamera(now) {
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
-    
-    // Ease out cubic
     const easeT = 1 - Math.pow(1 - t, 3);
     
     camera.position.lerpVectors(startPos, pos, easeT);
@@ -438,10 +436,24 @@ function smoothResetView() {
   requestAnimationFrame(updateCamera);
 }
 
+function getPolygonCentroid(geometry) {
+  let latSum = 0, lngSum = 0, count = 0;
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  
+  polygons.forEach(polygon => {
+    polygon[0].forEach(coord => {
+      lngSum += coord[0];
+      latSum += coord[1];
+      count++;
+    });
+  });
+  
+  return { lat: latSum / count, lng: lngSum / count };
+}
+
 function showBiomePopup(feature) {
-  // Use the first coordinate of the polygon as a focal point
-  const coords = feature.geometry.type === "Polygon" ? feature.geometry.coordinates[0][0] : feature.geometry.coordinates[0][0][0];
-  focusOnPoint(coords[1], coords[0]);
+  const centroid = getPolygonCentroid(feature.geometry);
+  focusOnPoint(centroid.lat, centroid.lng);
 
   const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
   const biomeKey = type.includes("desert") ? "desert" : 
