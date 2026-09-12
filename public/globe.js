@@ -691,11 +691,6 @@ let pulseTime = 0;
 function animate() {
   requestAnimationFrame(animate);
 
-  // Stop auto-rotation if a popup or the fit-check panel is active
-  if (!isDragging && popupEl.hidden && fitCheckPanel.hidden) {
-    globeGroup.rotation.y += 0.0015;
-  }
-
   pulseTime += 0.03;
   const scale = 1 + (Math.sin(pulseTime) + 1) * 0.5;
   pulsingRings.forEach((ring) => {
