@@ -321,7 +321,7 @@ function raycastBiomes(e) {
     const uv = intersects[0].uv;
     // Convert UV to Lat/Lng
     const lng = uv.x * 360 - 180;
-    const lat = 90 - uv.y * 180;
+    const lat = uv.y * 180 - 90;
 
     // Check which feature contains this point
     return biomeFeatures.features.find((f) => {
