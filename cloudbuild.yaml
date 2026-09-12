@@ -1,0 +1,27 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/project-snap:$SHORT_SHA
+      - .
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/project-snap:$SHORT_SHA
+  # Env vars (GEMINI_API_KEY, VONAGE_APPLICATION_ID, VONAGE_PRIVATE_KEY_B64) are
+  # deliberately not set here: `gcloud run deploy` on an existing service only
+  # updates the fields you pass and carries the rest forward from the current
+  # revision, so the ones set during the original manual deploy stick around.
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - project-snap
+      - --image=us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/project-snap:$SHORT_SHA
+      - --region=us-central1
+      - --platform=managed
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/project-snap:$SHORT_SHA
