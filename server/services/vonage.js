@@ -2,10 +2,22 @@
 // AI styling experience into something shareable and live — a stylist call,
 // a live shopping stream, or a friend group video-rating a fit before you buy.
 import { Vonage } from "@vonage/server-sdk";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import "dotenv/config";
 
 const applicationId = process.env.VONAGE_APPLICATION_ID;
-const privateKeyPath = process.env.VONAGE_PRIVATE_KEY_PATH || "./private.key";
+
+// Local dev reads the key straight off disk. Deployed environments (Cloud
+// Run, etc.) can't ship a gitignored private.key file in the image, so they
+// instead pass the key base64-encoded as VONAGE_PRIVATE_KEY_B64 and we
+// materialize it to a temp file at startup.
+let privateKeyPath = process.env.VONAGE_PRIVATE_KEY_PATH || "./private.key";
+if (process.env.VONAGE_PRIVATE_KEY_B64) {
+  privateKeyPath = path.join(tmpdir(), "vonage-private.key");
+  writeFileSync(privateKeyPath, Buffer.from(process.env.VONAGE_PRIVATE_KEY_B64, "base64"));
+}
 
 let vonage = null;
 function getClient() {
