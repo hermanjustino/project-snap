@@ -370,7 +370,57 @@ function onClick(e) {
   }
 }
 
+function focusOnPoint(lat, lng, targetZ = 160) {
+  const pos = latLngToVector3(lat, lng, GLOBE_RADIUS, 80);
+  
+  // Simple linear transition for camera position
+  const startPos = camera.position.clone();
+  const duration = 1000;
+  const startTime = performance.now();
+
+  function updateCamera(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    
+    // Ease out cubic
+    const easeT = 1 - Math.pow(1 - t, 3);
+    
+    camera.position.lerpVectors(startPos, pos, easeT);
+    camera.lookAt(0, 0, 0);
+
+    if (t < 1) {
+      requestAnimationFrame(updateCamera);
+    }
+  }
+  requestAnimationFrame(updateCamera);
+}
+
+function smoothResetView() {
+  const startPos = camera.position.clone();
+  const targetPos = new THREE.Vector3(0, 0, 280);
+  const duration = 800;
+  const startTime = performance.now();
+
+  function updateCamera(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    const easeT = 1 - Math.pow(1 - t, 3);
+    
+    camera.position.lerpVectors(startPos, targetPos, easeT);
+    camera.lookAt(0, 0, 0);
+
+    if (t < 1) {
+      requestAnimationFrame(updateCamera);
+    }
+  }
+  requestAnimationFrame(updateCamera);
+}
+
 function showBiomePopup(feature) {
+  // Use the first coordinate of the polygon as a focal point
+  const coords = feature.geometry.type === "Polygon" ? feature.geometry.coordinates[0][0] : feature.geometry.coordinates[0][0][0];
+  focusOnPoint(coords[1], coords[0]);
+
   const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
   const biomeKey = type.includes("desert") ? "desert" : "forest";
   const info = BIOME_ADVICE[biomeKey];
@@ -386,6 +436,7 @@ function showBiomePopup(feature) {
     popupEl.hidden = true;
     selectedBiomeUid = null;
     updateOverlayTexture();
+    smoothResetView();
   });
 }
 
@@ -398,6 +449,7 @@ function yearOptionsHtml(selectedYear) {
 }
 
 function showRegionPopup(marker) {
+  focusOnPoint(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
     <h3>${marker.label} Fashion Week</h3>
@@ -408,6 +460,7 @@ function showRegionPopup(marker) {
 
   popupEl.querySelector(".popup-close").addEventListener("click", () => {
     popupEl.hidden = true;
+    smoothResetView();
   });
 
   const yearSelect = popupEl.querySelector(".popup-year");
@@ -452,7 +505,10 @@ let pulseTime = 0;
 function animate() {
   requestAnimationFrame(animate);
 
-  if (!isDragging) globeGroup.rotation.y += 0.0015;
+  // Stop auto-rotation if a popup is active
+  if (!isDragging && popupEl.hidden) {
+    globeGroup.rotation.y += 0.0015;
+  }
 
   pulseTime += 0.03;
   const scale = 1 + (Math.sin(pulseTime) + 1) * 0.5;
