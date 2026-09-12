@@ -8,14 +8,31 @@
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
 const GLOBE_RADIUS = 80;
-const OCEAN_COLOR = "#cdba90";
-const GRID_COLOR = "rgba(107, 88, 66, 0.35)";
-const LAND_COLOR = "#b7a179";
-const LAND_STROKE = "#6b5842";
-const DESERT_COLOR = "#e3d5b8";
-const FOREST_COLOR = "#7d8c6b";
+const EARTH_TEXTURE_URL = "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
+const GRID_COLOR = "rgba(107, 88, 66, 0.25)";
+const LAND_COLOR = "rgba(183, 161, 121, 0.4)";
+const LAND_STROKE = "rgba(107, 88, 66, 0.4)";
+const DESERT_COLOR = "rgba(227, 213, 184, 0.5)";
+const FOREST_COLOR = "rgba(125, 140, 107, 0.5)";
+const BIOME_HOVER_COLOR = "rgba(255, 165, 0, 0.7)"; // Orange highlight
 const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
+
+// Biome clothing advice
+const BIOME_ADVICE = {
+  desert: {
+    title: "Desert Safety",
+    advice: "Wear loose, light-colored long sleeves and pants to protect from UV rays and heat stroke. A wide-brimmed hat and polarized sunglasses are essential. Avoid cotton; choose moisture-wicking fabrics."
+  },
+  forest: {
+    title: "Rainforest Safety",
+    advice: "Wear breathable, quick-dry clothing treated with permethrin to prevent insect-borne diseases (Malaria/Dengue). Long sleeves and tucked-in pants protect against leeches and thorns. Waterproof boots are a must."
+  }
+};
+
+let hoveredBiomeUid = null;
+let selectedBiomeUid = null;
+let biomeFeatures = [];
 
 // Starting with these three cities; more (Tokyo, Milan, Seoul, ...) come
 // once this pattern is proven out.
@@ -40,7 +57,7 @@ function latLngToVector3(lat, lng, radius, alt = 0) {
   );
 }
 
-function generateGlobeTexture(landFeatures) {
+function generateGlobeTexture(landFeatures, hoverUid = null, selectUid = null) {
   const width = 2048;
   const height = 1024;
   const canvas = document.createElement("canvas");
@@ -48,8 +65,8 @@ function generateGlobeTexture(landFeatures) {
   canvas.height = height;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = OCEAN_COLOR;
-  ctx.fillRect(0, 0, width, height);
+  // Make the background transparent so the Earth map shows through
+  ctx.clearRect(0, 0, width, height);
 
   ctx.strokeStyle = GRID_COLOR;
   ctx.lineWidth = 1;
@@ -67,9 +84,6 @@ function generateGlobeTexture(landFeatures) {
   }
 
   if (landFeatures?.features) {
-    ctx.strokeStyle = LAND_STROKE;
-    ctx.lineWidth = 1.5;
-
     const projectCoords = ([lng, lat]) => [((lng + 180) / 360) * width, ((90 - lat) / 180) * height];
 
     landFeatures.features.forEach((feature) => {
@@ -77,7 +91,25 @@ function generateGlobeTexture(landFeatures) {
       if (!geometry) return;
 
       const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
-      ctx.fillStyle = type.includes("desert") ? DESERT_COLOR : type.includes("forest") ? FOREST_COLOR : LAND_COLOR;
+      const isBiome = type.includes("desert") || type.includes("forest");
+      const uid = feature.properties?.name || feature.properties?.code;
+
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = LAND_STROKE;
+
+      if (isBiome) {
+        if (uid === selectUid) {
+          ctx.strokeStyle = "#000000"; // Black outline on click
+          ctx.lineWidth = 4;
+          ctx.fillStyle = BIOME_HOVER_COLOR;
+        } else if (uid === hoverUid) {
+          ctx.fillStyle = BIOME_HOVER_COLOR; // Orange highlight on hover
+        } else {
+          ctx.fillStyle = type.includes("desert") ? DESERT_COLOR : FOREST_COLOR;
+        }
+      } else {
+        ctx.fillStyle = LAND_COLOR;
+      }
 
       const polygons =
         geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
@@ -125,11 +157,37 @@ const dirLight = new THREE.DirectionalLight(0xf4ead2, 1.2);
 dirLight.position.set(200, 100, 150);
 scene.add(dirLight);
 
+const textureLoader = new THREE.TextureLoader();
+textureLoader.setCrossOrigin("anonymous");
+
 const sphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
-const initialTexture = generateGlobeTexture();
-const sphereMaterial = new THREE.MeshPhongMaterial({ map: initialTexture, shininess: 8 });
+const sphereMaterial = new THREE.MeshPhongMaterial({
+  color: 0xcdba90, // Fallback ocean color if texture fails
+  shininess: 8,
+});
 const globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
 globeGroup.add(globeMesh);
+
+textureLoader.load(
+  EARTH_TEXTURE_URL,
+  (texture) => {
+    sphereMaterial.map = texture;
+    sphereMaterial.color.set(0xffffff); // Clear fallback color
+    sphereMaterial.needsUpdate = true;
+  },
+  undefined,
+  (err) => console.error("Error loading Earth texture:", err)
+);
+
+const overlayGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
+const overlayMaterial = new THREE.MeshPhongMaterial({
+  map: generateGlobeTexture(),
+  transparent: true,
+  opacity: 1,
+  shininess: 0,
+});
+const overlayMesh = new THREE.Mesh(overlayGeometry, overlayMaterial);
+globeGroup.add(overlayMesh);
 
 const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 4, 64, 64);
 const atmosphereMaterial = new THREE.MeshBasicMaterial({
@@ -145,10 +203,11 @@ globeGroup.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial));
 fetch("/data/world_regions.json")
   .then((res) => (res.ok ? res.json() : Promise.reject(new Error("no local world data yet"))))
   .then((landData) => {
+    biomeFeatures = landData;
     const updatedTexture = generateGlobeTexture(landData);
-    sphereMaterial.map.dispose();
-    sphereMaterial.map = updatedTexture;
-    sphereMaterial.needsUpdate = true;
+    overlayMaterial.map.dispose();
+    overlayMaterial.map = updatedTexture;
+    overlayMaterial.needsUpdate = true;
   })
   .catch(() => {
     /* grid-only globe is the expected default for now */
@@ -184,6 +243,13 @@ function onPointerDown(e) {
   previousPointer = { x: e.clientX, y: e.clientY };
 }
 
+function updateOverlayTexture() {
+  const newTex = generateGlobeTexture(biomeFeatures, hoveredBiomeUid, selectedBiomeUid);
+  overlayMaterial.map.dispose();
+  overlayMaterial.map = newTex;
+  overlayMaterial.needsUpdate = true;
+}
+
 function onPointerMove(e) {
   if (isDragging) {
     const deltaX = e.clientX - previousPointer.x;
@@ -194,14 +260,33 @@ function onPointerMove(e) {
     return;
   }
 
-  const hit = raycastMarkers(e);
-  if (hit) {
-    tooltipEl.textContent = hit.userData.marker.label;
+  const markerHit = raycastMarkers(e);
+  const biomeHit = raycastBiomes(e);
+
+  if (markerHit) {
+    tooltipEl.textContent = markerHit.userData.marker.label;
     tooltipEl.style.left = `${e.clientX + 14}px`;
     tooltipEl.style.top = `${e.clientY + 14}px`;
     tooltipEl.hidden = false;
+    document.body.style.cursor = "pointer";
+  } else if (biomeHit) {
+    const name = biomeHit.properties.name;
+    if (hoveredBiomeUid !== name) {
+      hoveredBiomeUid = name;
+      updateOverlayTexture();
+    }
+    tooltipEl.textContent = name;
+    tooltipEl.style.left = `${e.clientX + 14}px`;
+    tooltipEl.style.top = `${e.clientY + 14}px`;
+    tooltipEl.hidden = false;
+    document.body.style.cursor = "pointer";
   } else {
     tooltipEl.hidden = true;
+    document.body.style.cursor = isDragging ? "grabbing" : "grab";
+    if (hoveredBiomeUid !== null) {
+      hoveredBiomeUid = null;
+      updateOverlayTexture();
+    }
   }
 }
 
@@ -221,10 +306,87 @@ function raycastMarkers(e) {
   return hit?.object;
 }
 
+function raycastBiomes(e) {
+  if (!biomeFeatures?.features) return null;
+  const rect = container.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+
+  const intersects = raycaster.intersectObject(overlayMesh);
+  if (intersects.length > 0) {
+    const uv = intersects[0].uv;
+    // Convert UV to Lat/Lng
+    const lng = uv.x * 360 - 180;
+    const lat = 90 - uv.y * 180;
+
+    // Check which feature contains this point
+    return biomeFeatures.features.find((f) => {
+      const type = (f.properties?.type || f.properties?.biome || "").toLowerCase();
+      if (!type.includes("desert") && !type.includes("forest")) return false;
+      return isPointInPolygon([lng, lat], f.geometry);
+    });
+  }
+  return null;
+}
+
+function isPointInPolygon(point, geometry) {
+  const [lng, lat] = point;
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+
+  for (const polygon of polygons) {
+    const ring = polygon[0];
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  return false;
+}
+
 function onClick(e) {
-  const hit = raycastMarkers(e);
-  if (!hit) return;
-  showRegionPopup(hit.userData.marker);
+  const markerHit = raycastMarkers(e);
+  if (markerHit) {
+    showRegionPopup(markerHit.userData.marker);
+    return;
+  }
+
+  const biomeHit = raycastBiomes(e);
+  if (biomeHit) {
+    const name = biomeHit.properties.name;
+    selectedBiomeUid = name;
+    updateOverlayTexture();
+    showBiomePopup(biomeHit);
+  } else {
+    selectedBiomeUid = null;
+    updateOverlayTexture();
+  }
+}
+
+function showBiomePopup(feature) {
+  const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
+  const biomeKey = type.includes("desert") ? "desert" : "forest";
+  const info = BIOME_ADVICE[biomeKey];
+
+  popupEl.innerHTML = `
+    <button class="popup-close" aria-label="Close">×</button>
+    <h3>${feature.properties.name}</h3>
+    <p><strong>${info.title}</strong></p>
+    <p style="font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.4;">${info.advice}</p>
+  `;
+  popupEl.hidden = false;
+  popupEl.querySelector(".popup-close").addEventListener("click", () => {
+    popupEl.hidden = true;
+    selectedBiomeUid = null;
+    updateOverlayTexture();
+  });
 }
 
 function yearOptionsHtml(selectedYear) {
