@@ -667,7 +667,7 @@ function closeFitCheck() {
 
 async function openRegionFitCheck(regionName) {
   fitCheckContext = { region: regionName };
-  fitCheckTitle.textContent = `Style Check — ${regionName}`;
+  fitCheckTitle.textContent = `Fit Check — ${regionName}`;
   fitCheckResultEl.hidden = true;
   fitCheckResultEl.innerHTML = "";
   fitCheckCaptureBtn.disabled = true;
