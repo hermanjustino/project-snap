@@ -1,0 +1,8 @@
+node_modules/
+.env
+uploads/*
+!uploads/.gitkeep
+server/data/wardrobe.json
+*.pem
+.DS_Store
+npm-debug.log*
