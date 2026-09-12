@@ -17,15 +17,17 @@ const FOREST_COLOR = "#7d8c6b";
 const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
 
-// Placeholder fashion-capital markers. Real per-region "popular clothing"
-// data is a later pass — for now this just proves the click-a-region-for-a-
-// popup mechanism end to end.
+// Starting with these three cities; more (Tokyo, Milan, Seoul, ...) come
+// once this pattern is proven out.
 const MARKERS = [
   { id: "nyc", lat: 40.7128, lng: -74.006, label: "New York" },
   { id: "ldn", lat: 51.5074, lng: -0.1278, label: "London" },
-  { id: "tyo", lat: 35.6762, lng: 139.6503, label: "Tokyo" },
   { id: "par", lat: 48.8566, lng: 2.3522, label: "Paris" },
 ];
+
+const DEFAULT_YEAR = 2020;
+const YEAR_MIN = 2015;
+const YEAR_MAX = 2025;
 
 function latLngToVector3(lat, lng, radius, alt = 0) {
   const phi = (90 - lat) * (Math.PI / 180);
@@ -225,16 +227,58 @@ function onClick(e) {
   showRegionPopup(hit.userData.marker);
 }
 
+function yearOptionsHtml(selectedYear) {
+  let options = "";
+  for (let year = YEAR_MAX; year >= YEAR_MIN; year--) {
+    options += `<option value="${year}"${year === selectedYear ? " selected" : ""}>${year}</option>`;
+  }
+  return options;
+}
+
 function showRegionPopup(marker) {
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
-    <h3>${marker.label}</h3>
-    <p>Popular styles here — coming soon.</p>
+    <h3>${marker.label} Fashion Week</h3>
+    <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
+    <div class="popup-images"><p class="muted">Loading…</p></div>
   `;
   popupEl.hidden = false;
+
   popupEl.querySelector(".popup-close").addEventListener("click", () => {
     popupEl.hidden = true;
   });
+
+  const yearSelect = popupEl.querySelector(".popup-year");
+  yearSelect.addEventListener("change", () => loadFashionWeekImages(marker.label, yearSelect.value));
+
+  loadFashionWeekImages(marker.label, DEFAULT_YEAR);
+}
+
+async function loadFashionWeekImages(city, year) {
+  const imagesEl = popupEl.querySelector(".popup-images");
+  if (!imagesEl) return; // popup was closed/reopened before this resolved
+  imagesEl.innerHTML = `<p class="muted">Searching ${city} Fashion Week ${year}…</p>`;
+
+  try {
+    const res = await fetch(`/api/fashion-week?city=${encodeURIComponent(city)}&year=${encodeURIComponent(year)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Search failed");
+
+    if (!data.images?.length) {
+      imagesEl.innerHTML = `<p class="muted">No images found for ${city} ${year}.</p>`;
+      return;
+    }
+
+    imagesEl.innerHTML = data.images
+      .map(
+        (img) => `<a href="${img.source}" target="_blank" rel="noopener noreferrer">
+          <img src="${img.thumbnailUrl}" alt="${img.title || `${city} ${year}`}" loading="lazy" />
+        </a>`
+      )
+      .join("");
+  } catch (err) {
+    imagesEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
+  }
 }
 
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
