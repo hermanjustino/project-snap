@@ -51,21 +51,26 @@ Open http://localhost:3000
 
 ## Architecture
 
+The server is stateless — it never stores wardrobe data. Each visitor's
+wardrobe (photos + Gemini's tags) lives entirely in **their own browser's
+localStorage**. That's what lets many hackathon attendees use the same
+deployed URL at once without seeing or overwriting each other's closets, and
+it means the server has no disk state to lose on restart/redeploy.
+
 ```
 public/            static frontend (vanilla JS, no build step)
+  app.js            owns the wardrobe in localStorage; resizes photos
+                     client-side before sending them to /analyze
 server/
-  index.js         express app entry point
+  index.js         express app entry point (stateless)
   routes/
-    wardrobe.js     upload + list + delete wardrobe items
-    outfit.js       /suggest (stylist) and /rate (rating bot)
+    wardrobe.js     POST /analyze — photo in, Gemini tags out, nothing stored
+    outfit.js       /suggest (stylist) and /rate (rating bot) — the client
+                     sends its wardrobe catalog with each /suggest call
     video.js        create Vonage sessions + tokens
   services/
     gemini.js       all Gemini prompts/calls live here
     vonage.js       Vonage Video session/token helpers
-    store.js        JSON-file wardrobe storage (swap for a real DB later)
-  data/
-    wardrobe.json   generated at runtime, gitignored
-uploads/            garment photos, gitignored
 ```
 
 ## Google Cloud
