@@ -1,13 +1,13 @@
 :root {
-  color-scheme: light dark;
-  --bg: #0f1115;
-  --panel: #171a21;
-  --panel-2: #1f232c;
-  --text: #f2f3f5;
-  --muted: #9aa1ac;
-  --accent: #ff5da2;
-  --accent-2: #7c5cff;
-  --border: #2a2f3a;
+  color-scheme: light;
+  --bg: #ece1c8;
+  --panel: #f8f2e2;
+  --panel-2: #f1e6cc;
+  --text: #4a4130;
+  --muted: #8c7f63;
+  --accent: #a8452b;
+  --accent-2: #c98a3b;
+  --border: #d9c9a3;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -158,4 +158,4 @@ label.upload input { display: none; }
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
-#publisher, #subscribers { background: #000; border-radius: 12px; min-height: 260px; }
+#publisher, #subscribers { background: #000; border: 1px solid var(--border); border-radius: 12px; min-height: 260px; }
