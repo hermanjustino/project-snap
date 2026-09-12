@@ -49,12 +49,16 @@ let hoveredBiomeUid = null;
 let selectedBiomeUid = null;
 let biomeFeatures = [];
 
-// Starting with these three cities; more (Tokyo, Milan, Seoul, ...) come
-// once this pattern is proven out.
 const MARKERS = [
   { id: "nyc", lat: 40.7128, lng: -74.006, label: "New York" },
   { id: "ldn", lat: 51.5074, lng: -0.1278, label: "London" },
   { id: "par", lat: 48.8566, lng: 2.3522, label: "Paris" },
+  { id: "lag", lat: 6.5244, lng: 3.3792, label: "Lagos" },
+  { id: "nbo", lat: -1.2921, lng: 36.8219, label: "Nairobi" },
+  { id: "tyo", lat: 35.6762, lng: 139.6503, label: "Tokyo" },
+  { id: "sha", lat: 31.2304, lng: 121.4737, label: "Shanghai" },
+  { id: "syd", lat: -33.8688, lng: 151.2093, label: "Sydney" },
+  { id: "rio", lat: -22.9068, lng: -43.1729, label: "Rio de Janeiro" },
 ];
 
 const DEFAULT_YEAR = 2020;
