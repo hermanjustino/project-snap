@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Snap</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/@vonage/client-sdk-video@latest/dist/js/opentok.js"></script>
+</head>
+<body>
+  <header>
+    <a href="/" class="back-link">← Globe</a>
+    <h1>📸 Project Snap</h1>
+    <p>Your wardrobe, understood by AI — styled and shared live.</p>
+  </header>
+
+  <nav>
+    <button data-tab="wardrobe" class="active">Wardrobe</button>
+    <button data-tab="stylist">AI Stylist</button>
+    <button data-tab="rate">Rate My Fit</button>
+    <button data-tab="live">Live Session</button>
+  </nav>
+
+  <main>
+    <!-- WARDROBE -->
+    <section id="wardrobe" class="active">
+      <div class="card">
+        <h2>Add an item</h2>
+        <p class="muted">Snap a photo of a garment — Gemini will tag it (category, colors, style, season) automatically.</p>
+        <label class="upload">
+          📷 Choose photo
+          <input type="file" id="photoInput" accept="image/*" capture="environment" />
+        </label>
+        <span id="uploadStatus" class="muted"></span>
+      </div>
+      <div class="card">
+        <h2>Your Wardrobe (<span id="itemCount">0</span>)</h2>
+        <p class="muted">Saved only in this browser on this device — nobody else at the hackathon sees your closet.</p>
+        <div id="wardrobeGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <!-- STYLIST -->
+    <section id="stylist">
+      <div class="card">
+        <h2>Ask your AI personal stylist</h2>
+        <p class="muted">e.g. "Something for a rainy first date", "Job interview at a startup", "Brunch with the girls"</p>
+        <div class="row">
+          <input type="text" id="stylistRequest" placeholder="What do you need an outfit for?" />
+          <button class="primary" id="stylistBtn">Style me</button>
+        </div>
+        <div id="stylistResult" class="result" style="display:none"></div>
+      </div>
+    </section>
+
+    <!-- RATE -->
+    <section id="rate">
+      <div class="card">
+        <h2>Outfit-rating bot</h2>
+        <p class="muted">Upload a fit pic and get a score + feedback from Gemini.</p>
+        <label class="upload">
+          📷 Choose photo
+          <input type="file" id="rateInput" accept="image/*" capture="environment" />
+        </label>
+        <div id="rateResult" class="result" style="display:none"></div>
+      </div>
+    </section>
+
+    <!-- LIVE -->
+    <section id="live">
+      <div class="card">
+        <h2>Live styling session</h2>
+        <p class="muted">Powered by the Vonage Video API — start a room and share the link for a live stylist call, shopping stream, or lookbook watch-party.</p>
+        <button class="primary" id="startSessionBtn">Start live session</button>
+        <div id="videoStatus" class="muted"></div>
+        <div class="video-grid" style="margin-top:1rem">
+          <div id="publisher"></div>
+          <div id="subscribers"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="closet.js"></script>
+</body>
+</html>

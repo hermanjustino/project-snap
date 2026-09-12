@@ -4,82 +4,73 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Snap</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://unpkg.com/@vonage/client-sdk-video@latest/dist/js/opentok.js"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #ece1c8;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 1.5rem 1.75rem;
+      pointer-events: none;
+    }
+    header * { pointer-events: auto; }
+    header h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      letter-spacing: 0.02em;
+      color: #4a4130;
+    }
+    header p {
+      margin: 0.2rem 0 0;
+      font-size: 0.8rem;
+      color: #8c7f63;
+    }
+    a.closet-link {
+      text-decoration: none;
+      color: #4a4130;
+      background: #f8f2e2;
+      border: 1px solid #d9c9a3;
+      padding: 0.5rem 1.1rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    #globeViz { position: fixed; inset: 0; }
+    .hint {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.8rem;
+      color: #8c7f63;
+      z-index: 10;
+    }
+  </style>
 </head>
 <body>
   <header>
-    <h1>📸 Project Snap</h1>
-    <p>Your wardrobe, understood by AI — styled and shared live.</p>
+    <div>
+      <h1>📸 Project Snap</h1>
+      <p>Regional style, one spin away — click-to-explore coming next.</p>
+    </div>
+    <a class="closet-link" href="/closet.html">My Closet →</a>
   </header>
 
-  <nav>
-    <button data-tab="wardrobe" class="active">Wardrobe</button>
-    <button data-tab="stylist">AI Stylist</button>
-    <button data-tab="rate">Rate My Fit</button>
-    <button data-tab="live">Live Session</button>
-  </nav>
+  <div id="globeViz"></div>
+  <p class="hint">Drag to spin</p>
 
-  <main>
-    <!-- WARDROBE -->
-    <section id="wardrobe" class="active">
-      <div class="card">
-        <h2>Add an item</h2>
-        <p class="muted">Snap a photo of a garment — Gemini will tag it (category, colors, style, season) automatically.</p>
-        <label class="upload">
-          📷 Choose photo
-          <input type="file" id="photoInput" accept="image/*" capture="environment" />
-        </label>
-        <span id="uploadStatus" class="muted"></span>
-      </div>
-      <div class="card">
-        <h2>Your Wardrobe (<span id="itemCount">0</span>)</h2>
-        <p class="muted">Saved only in this browser on this device — nobody else at the hackathon sees your closet.</p>
-        <div id="wardrobeGrid" class="grid"></div>
-      </div>
-    </section>
-
-    <!-- STYLIST -->
-    <section id="stylist">
-      <div class="card">
-        <h2>Ask your AI personal stylist</h2>
-        <p class="muted">e.g. "Something for a rainy first date", "Job interview at a startup", "Brunch with the girls"</p>
-        <div class="row">
-          <input type="text" id="stylistRequest" placeholder="What do you need an outfit for?" />
-          <button class="primary" id="stylistBtn">Style me</button>
-        </div>
-        <div id="stylistResult" class="result" style="display:none"></div>
-      </div>
-    </section>
-
-    <!-- RATE -->
-    <section id="rate">
-      <div class="card">
-        <h2>Outfit-rating bot</h2>
-        <p class="muted">Upload a fit pic and get a score + feedback from Gemini.</p>
-        <label class="upload">
-          📷 Choose photo
-          <input type="file" id="rateInput" accept="image/*" capture="environment" />
-        </label>
-        <div id="rateResult" class="result" style="display:none"></div>
-      </div>
-    </section>
-
-    <!-- LIVE -->
-    <section id="live">
-      <div class="card">
-        <h2>Live styling session</h2>
-        <p class="muted">Powered by the Vonage Video API — start a room and share the link for a live stylist call, shopping stream, or lookbook watch-party.</p>
-        <button class="primary" id="startSessionBtn">Start live session</button>
-        <div id="videoStatus" class="muted"></div>
-        <div class="video-grid" style="margin-top:1rem">
-          <div id="publisher"></div>
-          <div id="subscribers"></div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <script src="app.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.46.2/dist/globe.gl.min.js"></script>
+  <script src="globe.js"></script>
 </body>
 </html>
