@@ -71,10 +71,10 @@ uploads/            garment photos, gitignored
 ## Google Cloud
 
 This app talks to Gemini via an AI Studio API key (no GCP project required
-for that path). A GCP project (`project-snap`) is set up alongside this repo
-for anything that benefits from it during/after the hackathon — e.g. Cloud
-Run deployment or upgrading to Vertex AI. See `GCP.md` (once created) for
-project details.
+for that path). A GCP project (`project-snap-e9fe4f`) is set up alongside
+this repo for anything that benefits from it during/after the hackathon —
+e.g. Cloud Run deployment or upgrading to Vertex AI. See [`GCP.md`](./GCP.md)
+for project details.
 
 ## Demo script (for judges)
 
