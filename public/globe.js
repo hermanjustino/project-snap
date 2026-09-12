@@ -485,16 +485,54 @@ async function loadFashionWeekImages(city, year) {
     }
 
     imagesEl.innerHTML = data.images
-      .map(
-        (img) => `<a href="${img.source}" target="_blank" rel="noopener noreferrer">
-          <img src="${img.thumbnailUrl}" alt="${img.title || `${city} ${year}`}" loading="lazy" />
-        </a>`
-      )
+      .map((img) => {
+        const alt = img.title || `${city} ${year}`;
+        return `<img
+          src="${img.thumbnailUrl}"
+          data-full="${img.imageUrl}"
+          data-source="${img.source || img.imageUrl}"
+          alt="${alt}"
+          loading="lazy" />`;
+      })
       .join("");
   } catch (err) {
     imagesEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
   }
 }
+
+// Clicking a fashion-week thumbnail opens the full-size image in a lightbox
+// instead of navigating away to its source page. Delegated on popupEl (which
+// itself is never replaced, only its innerHTML) so this keeps working across
+// every showRegionPopup() re-render without needing to rebind per image.
+const lightboxEl = document.getElementById("imageLightbox");
+const lightboxImg = document.getElementById("lightboxImg");
+const lightboxSource = document.getElementById("lightboxSource");
+
+function openLightbox(fullUrl, sourceUrl, alt) {
+  lightboxImg.src = fullUrl;
+  lightboxImg.alt = alt || "";
+  lightboxSource.href = sourceUrl || fullUrl;
+  lightboxEl.hidden = false;
+}
+
+function closeLightbox() {
+  lightboxEl.hidden = true;
+  lightboxImg.src = "";
+}
+
+popupEl.addEventListener("click", (e) => {
+  const img = e.target.closest(".popup-images img");
+  if (!img) return;
+  openLightbox(img.dataset.full, img.dataset.source, img.alt);
+});
+
+lightboxEl.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
+lightboxEl.addEventListener("click", (e) => {
+  if (e.target === lightboxEl) closeLightbox(); // backdrop click
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !lightboxEl.hidden) closeLightbox();
+});
 
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
