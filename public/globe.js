@@ -12,6 +12,8 @@ const OCEAN_COLOR = "#cdba90";
 const GRID_COLOR = "rgba(107, 88, 66, 0.35)";
 const LAND_COLOR = "#b7a179";
 const LAND_STROKE = "#6b5842";
+const DESERT_COLOR = "#e3d5b8";
+const FOREST_COLOR = "#7d8c6b";
 const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
 
@@ -63,7 +65,6 @@ function generateGlobeTexture(landFeatures) {
   }
 
   if (landFeatures?.features) {
-    ctx.fillStyle = LAND_COLOR;
     ctx.strokeStyle = LAND_STROKE;
     ctx.lineWidth = 1.5;
 
@@ -72,6 +73,10 @@ function generateGlobeTexture(landFeatures) {
     landFeatures.features.forEach((feature) => {
       const geometry = feature.geometry;
       if (!geometry) return;
+
+      const type = feature.properties?.type || feature.properties?.biome;
+      ctx.fillStyle = type === "desert" ? DESERT_COLOR : type === "forest" ? FOREST_COLOR : LAND_COLOR;
+
       const polygons =
         geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
 
@@ -135,8 +140,8 @@ globeGroup.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial));
 
 // Optional real landmass outlines — falls back to grid-only if the file
 // isn't present yet (a later "piece by piece" step can drop this file in).
-fetch("/data/ne_50m_land.json")
-  .then((res) => (res.ok ? res.json() : Promise.reject(new Error("no local land data yet"))))
+fetch("/data/world_regions.json")
+  .then((res) => (res.ok ? res.json() : Promise.reject(new Error("no local world data yet"))))
   .then((landData) => {
     const updatedTexture = generateGlobeTexture(landData);
     sphereMaterial.map.dispose();
