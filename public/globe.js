@@ -59,6 +59,8 @@ const MARKERS = [
   { id: "sha", lat: 31.2304, lng: 121.4737, label: "Shanghai" },
   { id: "syd", lat: -33.8688, lng: 151.2093, label: "Sydney" },
   { id: "rio", lat: -22.9068, lng: -43.1729, label: "Rio de Janeiro" },
+  { id: "lax", lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
+  { id: "jnb", lat: -26.2041, lng: 28.0473, label: "Johannesburg" },
 ];
 
 const DEFAULT_YEAR = 2020;
@@ -468,7 +470,7 @@ function showBiomePopup(feature) {
     <h3>${feature.properties.name}</h3>
     <p><strong>${info.title}</strong></p>
     <p style="font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.4;">${info.advice}</p>
-    <button class="biome-fit-check-btn">📸 Check My Fit Live</button>
+    <button class="biome-fit-check-btn">📸 Fit Check</button>
   `;
   popupEl.hidden = false;
   popupEl.querySelector(".popup-close").addEventListener("click", () => {
@@ -498,7 +500,7 @@ function showRegionPopup(marker) {
     <h3>${marker.label} Fashion Week</h3>
     <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
     <div class="popup-images"><p class="muted">Loading…</p></div>
-    <button class="fit-check-btn">📸 Check My Fit Live</button>
+    <button class="fit-check-btn">📸 Fit Check</button>
   `;
   popupEl.hidden = false;
 
