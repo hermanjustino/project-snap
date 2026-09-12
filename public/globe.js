@@ -452,6 +452,7 @@ function getPolygonCentroid(geometry) {
 }
 
 function showBiomePopup(feature) {
+  currentPopupFeature = feature;
   const centroid = getPolygonCentroid(feature.geometry);
   focusOnPoint(centroid.lat, centroid.lng);
 
@@ -467,6 +468,7 @@ function showBiomePopup(feature) {
     <h3>${feature.properties.name}</h3>
     <p><strong>${info.title}</strong></p>
     <p style="font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.4;">${info.advice}</p>
+    <button class="biome-fit-check-btn">📸 Check My Fit Live</button>
   `;
   popupEl.hidden = false;
   popupEl.querySelector(".popup-close").addEventListener("click", () => {
@@ -486,6 +488,7 @@ function yearOptionsHtml(selectedYear) {
 }
 
 let currentPopupMarker = null;
+let currentPopupFeature = null;
 
 function showRegionPopup(marker) {
   currentPopupMarker = marker;
@@ -571,6 +574,10 @@ popupEl.addEventListener("click", (e) => {
   if (e.target.closest(".fit-check-btn") && currentPopupMarker) {
     const year = popupEl.querySelector(".popup-year")?.value || DEFAULT_YEAR;
     openFitCheck(currentPopupMarker.label, year);
+  }
+
+  if (e.target.closest(".biome-fit-check-btn") && currentPopupFeature) {
+    openRegionFitCheck(currentPopupFeature.properties.name);
   }
 });
 
@@ -658,6 +665,39 @@ function closeFitCheck() {
   fitCheckPublisherEl.innerHTML = "";
 }
 
+async function openRegionFitCheck(regionName) {
+  fitCheckContext = { region: regionName };
+  fitCheckTitle.textContent = `Style Check — ${regionName}`;
+  fitCheckResultEl.hidden = true;
+  fitCheckResultEl.innerHTML = "";
+  fitCheckCaptureBtn.disabled = true;
+  fitCheckCaptureBtn.textContent = "Starting camera…";
+  fitCheckPanel.hidden = false;
+  popupEl.hidden = true;
+
+  try {
+    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+    const videoEl = document.createElement("video");
+    videoEl.autoplay = true;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.style.width = "100%";
+    videoEl.style.height = "100%";
+    videoEl.style.objectFit = "cover";
+    videoEl.srcObject = fitCheckStream;
+    fitCheckPublisherEl.innerHTML = "";
+    fitCheckPublisherEl.appendChild(videoEl);
+
+    fitCheckCaptureBtn.disabled = false;
+    fitCheckCaptureBtn.textContent = "📸 Capture & Score";
+  } catch (err) {
+    fitCheckResultEl.hidden = false;
+    fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
+  }
+}
+
+
 fitCheckCloseBtn.addEventListener("click", closeFitCheck);
 
 fitCheckCaptureBtn.addEventListener("click", async () => {
@@ -671,27 +711,44 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
   const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
   fitCheckResultEl.hidden = false;
-  fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} Fashion Week ${fitCheckContext.year}…</p>`;
+  
+  let url = "/api/outfit/fit-check";
+  const form = new FormData();
+  form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
+
+  if (fitCheckContext.region) {
+    fitCheckResultEl.innerHTML = `<p class="muted">Assessing your outfit for the ${fitCheckContext.region} region…</p>`;
+    form.append("context", `Assess this outfit for suitability in the ${fitCheckContext.region} region. Consider local climate and cultural context.`);
+    url = "/api/outfit/rate";
+  } else {
+    fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} Fashion Week ${fitCheckContext.year}…</p>`;
+    form.append("city", fitCheckContext.city);
+    form.append("year", fitCheckContext.year);
+  }
+
   fitCheckCaptureBtn.disabled = true;
 
   try {
-    const form = new FormData();
-    form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
-    form.append("city", fitCheckContext.city);
-    form.append("year", fitCheckContext.year);
-
-    const res = await fetch("/api/outfit/fit-check", { method: "POST", body: form });
+    const res = await fetch(url, { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Fit check failed");
 
-    fitCheckResultEl.innerHTML = `
-      <div class="fit-score-badge" style="background: ${scoreGradient(data.fitScore)}">
-        <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
-      </div>
-      <h4 class="fit-verdict" style="color: ${scoreAccent(data.fitScore)}">${data.verdict}</h4>
-      <p class="fit-reasoning">${data.reasoning}</p>
-      <p class="fit-tip">💡 ${data.tip}</p>
-    `;
+    if (fitCheckContext.region) {
+       fitCheckResultEl.innerHTML = `
+        <h3>${data.score}/10 — ${data.vibe}</h3>
+        <p><em>${data.oneLiner}</em></p>
+        <p><strong>Working:</strong> ${(data.highlights || []).join(", ")}</p>
+        <p><strong>Try:</strong> ${(data.suggestions || []).join(", ")}</p>`;
+    } else {
+       fitCheckResultEl.innerHTML = `
+         <div class="fit-score-badge" style="background: ${scoreGradient(data.fitScore)}">
+           <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
+         </div>
+         <h4 class="fit-verdict" style="color: ${scoreAccent(data.fitScore)}">${data.verdict}</h4>
+         <p class="fit-reasoning">${data.reasoning}</p>
+         <p class="fit-tip">💡 ${data.tip}</p>
+       `;
+    }
   } catch (err) {
     fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
   } finally {
