@@ -46,7 +46,8 @@
       font-size: 0.85rem;
       white-space: nowrap;
     }
-    #globeViz { position: fixed; inset: 0; }
+    #globeViz { position: fixed; inset: 0; cursor: grab; }
+    #globeViz:active { cursor: grabbing; }
     .hint {
       position: fixed;
       bottom: 1.5rem;
@@ -56,21 +57,83 @@
       color: #8c7f63;
       z-index: 10;
     }
+    #markerTooltip {
+      position: fixed;
+      z-index: 20;
+      background: #4a4130;
+      color: #f8f2e2;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    .controls {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.75rem;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .controls button {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 999px;
+      border: 1px solid #d9c9a3;
+      background: #f8f2e2;
+      color: #4a4130;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #regionPopup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+      background: #f8f2e2;
+      border: 1px solid #d9c9a3;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      min-width: 220px;
+      box-shadow: 0 10px 30px rgba(74, 65, 48, 0.2);
+      color: #4a4130;
+    }
+    #regionPopup h3 { margin: 0 0 0.4rem; }
+    #regionPopup p { margin: 0; font-size: 0.85rem; color: #8c7f63; }
+    .popup-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      border: none;
+      background: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: #8c7f63;
+    }
   </style>
 </head>
 <body>
   <header>
     <div>
       <h1>📸 Project Snap</h1>
-      <p>Regional style, one spin away — click-to-explore coming next.</p>
+      <p>Regional style, one spin away — click a pin to preview it.</p>
     </div>
     <a class="closet-link" href="/closet.html">My Closet →</a>
   </header>
 
   <div id="globeViz"></div>
   <p class="hint">Drag to spin</p>
+  <p id="markerTooltip" hidden></p>
+  <div id="regionPopup" hidden></div>
 
-  <script src="https://unpkg.com/globe.gl@2.46.2/dist/globe.gl.min.js"></script>
-  <script src="globe.js"></script>
+  <div class="controls">
+    <button id="zoomIn" aria-label="Zoom in">+</button>
+    <button id="zoomOut" aria-label="Zoom out">−</button>
+    <button id="resetView" aria-label="Reset view">⟳</button>
+  </div>
+
+  <script type="module" src="globe.js"></script>
 </body>
 </html>
