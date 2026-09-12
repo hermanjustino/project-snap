@@ -1,4 +1,4 @@
-// Gemini is Project Snap's "AI brain": it looks at wardrobe photos and turns
+// Gemini is fitd's "AI brain": it looks at wardrobe photos and turns
 // them into structured metadata, then reasons over that metadata to build
 // outfits and rate looks.
 import { GoogleGenAI } from "@google/genai";

@@ -1,7 +1,7 @@
 {
-  "name": "project-snap",
+  "name": "fitd",
   "version": "0.1.0",
-  "description": "Project Snap - an AI wardrobe inventory + personal stylist, powered by Gemini and Vonage Video API",
+  "description": "fitd - an AI wardrobe inventory + personal stylist, powered by Gemini and Vonage Video API",
   "type": "module",
   "main": "server/index.js",
   "scripts": {

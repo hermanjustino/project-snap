@@ -1,4 +1,4 @@
-// Vonage Video API is Project Snap's "communication layer": it turns the
+// Vonage Video API is fitd's "communication layer": it turns the
 // AI styling experience into something shareable and live — a stylist call,
 // a live shopping stream, or a friend group video-rating a fit before you buy.
 import { Vonage } from "@vonage/server-sdk";

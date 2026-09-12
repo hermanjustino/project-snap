@@ -1,7 +1,7 @@
 // Phase 2 of the globe: ported from a raw Three.js component (React/Next.js
 // removed — hooks/JSX/Tailwind/lucide-react stripped out, but the actual
 // scene/texture/interaction logic is framework-agnostic and kept as-is).
-// Recolored from the original's dark slate/blue theme to Project Snap's
+// Recolored from the original's dark slate/blue theme to fitd's
 // beige palette. Grid + land are baked into a canvas texture instead of
 // drawn as separate scene objects, which sidesteps the async-scene-graph
 // timing issue we hit with the previous globe.gl-based graticule fix.

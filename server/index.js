@@ -25,5 +25,5 @@ app.use("/api/fashion-week", fashionWeekRoutes);
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`✨ Project Snap running at http://localhost:${PORT}`);
+  console.log(`✨ fitd running at http://localhost:${PORT}`);
 });

@@ -1,8 +1,8 @@
-# Project Snap 📸
+# fitd 📸
 
 **Your wardrobe, understood by AI — styled and shared live.**
 
-Built for the AI Fashion Tech Hackathon. Project Snap is a smart wardrobe
+Built for the AI Fashion Tech Hackathon. fitd is a smart wardrobe
 inventory system: snap photos of what you own, and an AI personal stylist
 picks real outfits from *your actual closet* — then lets you take the whole
 experience live over video.
