@@ -395,9 +395,14 @@ function onClick(e) {
 }
 
 function focusOnPoint(lat, lng, targetZ = 150) {
-  // Calculate the target position based on Lat/Lng
-  const pos = latLngToVector3(lat, lng, GLOBE_RADIUS, targetZ - GLOBE_RADIUS);
-  
+  // latLngToVector3 gives a position in the globe's own unrotated local
+  // space. The globe can already be rotated from a manual drag, so that
+  // local position has to be converted to its actual current world
+  // position (via the globe's rotation) — otherwise the camera flies to
+  // where the marker WOULD be at zero rotation, causing a visible jump.
+  const localPos = latLngToVector3(lat, lng, GLOBE_RADIUS, targetZ - GLOBE_RADIUS);
+  const pos = localPos.clone().applyQuaternion(globeGroup.quaternion);
+
   const startPos = camera.position.clone();
   const duration = 1200;
   const startTime = performance.now();
