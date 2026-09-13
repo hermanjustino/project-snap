@@ -68,6 +68,9 @@ const MARKERS = [
   { id: "ber", lat: 52.52, lng: 13.405, label: "Berlin" },
   { id: "sao", lat: -23.5505, lng: -46.6333, label: "São Paulo" },
   { id: "dxb", lat: 25.2048, lng: 55.2708, label: "Dubai" },
+  { id: "yyz", lat: 43.6532, lng: -79.3832, label: "Toronto" },
+  { id: "lad", lat: -8.839, lng: 13.2894, label: "Luanda" },
+  { id: "bom", lat: 19.076, lng: 72.8777, label: "Mumbai" },
 ];
 
 const DEFAULT_YEAR = 2025;
