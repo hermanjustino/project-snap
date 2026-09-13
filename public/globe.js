@@ -63,7 +63,7 @@ const MARKERS = [
   { id: "jnb", lat: -26.2041, lng: 28.0473, label: "Johannesburg" },
 ];
 
-const DEFAULT_YEAR = 2020;
+const DEFAULT_YEAR = 2025;
 const YEAR_MIN = 2015;
 const YEAR_MAX = 2025;
 
