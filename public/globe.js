@@ -61,6 +61,13 @@ const MARKERS = [
   { id: "rio", lat: -22.9068, lng: -43.1729, label: "Rio de Janeiro" },
   { id: "lax", lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
   { id: "jnb", lat: -26.2041, lng: 28.0473, label: "Johannesburg" },
+  // Milan completes the "Big Four" (with New York, London, Paris above).
+  { id: "mil", lat: 45.4642, lng: 9.19, label: "Milan" },
+  { id: "seo", lat: 37.5665, lng: 126.978, label: "Seoul" },
+  { id: "cph", lat: 55.6761, lng: 12.5683, label: "Copenhagen" },
+  { id: "ber", lat: 52.52, lng: 13.405, label: "Berlin" },
+  { id: "sao", lat: -23.5505, lng: -46.6333, label: "São Paulo" },
+  { id: "dxb", lat: 25.2048, lng: 55.2708, label: "Dubai" },
 ];
 
 const DEFAULT_YEAR = 2025;
