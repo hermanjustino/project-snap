@@ -1,7 +1,20 @@
 import { Router } from "express";
 import multer from "multer";
-import { rateFitAgainstTrends, rateOutfit, suggestOutfit } from "../services/gemini.js";
+import { readFileSync } from "node:fs";
+import {
+  rateCityMatches,
+  rateFitAgainstTrends,
+  rateOutfit,
+  shortlistCities,
+  suggestOutfit,
+} from "../services/gemini.js";
 import { fetchImageAsBase64, searchCityStyles } from "../services/imageSearch.js";
+
+// Same city list the globe draws its pins from.
+const CITIES = JSON.parse(readFileSync(new URL("../../public/data/cities.json", import.meta.url), "utf8"));
+const CITY_MATCH_YEAR = 2025;
+const SHORTLIST_SIZE = 3;
+const REFERENCES_PER_CITY_STYLE = 1;
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const router = Router();
@@ -74,6 +87,64 @@ router.post("/fit-check", upload.single("photo"), async (req, res) => {
   } catch (err) {
     console.error("[outfit] fit-check failed:", err);
     res.status(500).json({ error: "Failed to run fit check", detail: String(err.message || err) });
+  }
+});
+
+// "Which city matches your fit?": a quick text-only pass shortlists the
+// closest cities, then the outfit is scored against real photos of every
+// style in each of them.
+router.post("/city-match", upload.single("photo"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "photo field is required" });
+  const selfieBase64 = req.file.buffer.toString("base64");
+
+  try {
+    const shortlistIds = await shortlistCities(selfieBase64, req.file.mimetype, CITIES, SHORTLIST_SIZE);
+    const shortlist = [...new Set(shortlistIds)]
+      .map((id) => CITIES.find((c) => c.id === id))
+      .filter(Boolean)
+      .slice(0, SHORTLIST_SIZE);
+    if (shortlist.length === 0) {
+      return res.status(502).json({ error: "Couldn't pick candidate cities — try again." });
+    }
+
+    const cityReferences = await Promise.all(
+      shortlist.map(async (city) => {
+        const sections = await searchCityStyles(city.label, CITY_MATCH_YEAR);
+        const styles = await Promise.all(
+          sections.map(async ({ label, images }) => {
+            const fetched = await Promise.allSettled(
+              images.slice(0, REFERENCES_PER_CITY_STYLE).map((img) => fetchImageAsBase64(img.thumbnailUrl))
+            );
+            return { label, images: fetched.filter((r) => r.status === "fulfilled").map((r) => r.value) };
+          })
+        );
+        return { city: city.label, styles: styles.filter((s) => s.images.length > 0) };
+      })
+    );
+    const usable = cityReferences.filter((c) => c.styles.length > 0);
+    if (usable.length === 0) {
+      return res.status(502).json({ error: "Couldn't load reference photos to compare against — try again." });
+    }
+
+    const result = await rateCityMatches(selfieBase64, req.file.mimetype, usable);
+
+    // Attach each city's id and coordinates (so the globe can fly there) and
+    // make sure the best match comes first.
+    const matches = (result.matches || [])
+      .map((m) => {
+        const city = shortlist.find((c) => c.label === m.city);
+        return city && { ...m, id: city.id, lat: city.lat, lng: city.lng };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.matchPercent - a.matchPercent);
+    if (matches.length === 0) {
+      return res.status(502).json({ error: "Couldn't score the cities — try again." });
+    }
+
+    res.json({ matches, verdict: result.verdict, tip: result.tip });
+  } catch (err) {
+    console.error("[outfit] city-match failed:", err);
+    res.status(500).json({ error: "Failed to match your fit to a city", detail: String(err.message || err) });
   }
 });
 

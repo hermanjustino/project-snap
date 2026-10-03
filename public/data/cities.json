@@ -1,0 +1,142 @@
+[
+  {
+    "id": "nyc",
+    "lat": 40.7128,
+    "lng": -74.006,
+    "label": "New York",
+    "style": "Fast-paced mix of polished workwear and downtown streetwear: black-heavy palettes, tailored coats, sneakers with everything, logo-light minimalism next to hip-hop-rooted street style."
+  },
+  {
+    "id": "ldn",
+    "lat": 51.5074,
+    "lng": -0.1278,
+    "label": "London",
+    "style": "Eclectic and irreverent: vintage and charity-shop finds, tailoring with a punk or subculture twist, trench coats, layering for grey weather, grime-influenced tracksuits."
+  },
+  {
+    "id": "par",
+    "lat": 48.8566,
+    "lng": 2.3522,
+    "label": "Paris",
+    "style": "Effortless, understated chic: neutral palettes (navy, camel, black, white), well-cut basics, trench coats, ballet flats and loafers, minimal jewelry, nothing that looks like it's trying."
+  },
+  {
+    "id": "lag",
+    "lat": 6.5244,
+    "lng": 3.3792,
+    "label": "Lagos",
+    "style": "Bold and celebratory: vibrant Ankara and adire prints, tailored agbada and kaftans worn modern, statement colours and accessories, Afrobeats-driven luxe streetwear."
+  },
+  {
+    "id": "nbo",
+    "lat": -1.2921,
+    "lng": 36.8219,
+    "label": "Nairobi",
+    "style": "Practical and creative: kitenge and Maasai shuka prints mixed into everyday wear, upcycled and secondhand (mitumba) styling, earthy tones, layering for cool mornings."
+  },
+  {
+    "id": "tyo",
+    "lat": 35.6762,
+    "lng": 139.6503,
+    "label": "Tokyo",
+    "style": "Experimental and meticulous: avant-garde silhouettes, heavy layering, Harajuku street style, Ura-Hara streetwear, workwear and Americana done with obsessive detail, mixed textures."
+  },
+  {
+    "id": "sha",
+    "lat": 31.2304,
+    "lng": 121.4737,
+    "label": "Shanghai",
+    "style": "Polished and trend-forward: sleek luxury pieces, modern takes on the qipao and mandarin collar, clean minimalist streetwear, high-low mixing, sharp accessories."
+  },
+  {
+    "id": "syd",
+    "lat": -33.8688,
+    "lng": 151.2093,
+    "label": "Sydney",
+    "style": "Relaxed coastal ease: linen, breezy dresses, swim-to-street pieces, sneakers and slides, sun-washed neutrals and pastels, laid-back surf and athleisure."
+  },
+  {
+    "id": "rio",
+    "lat": -22.9068,
+    "lng": -43.1729,
+    "label": "Rio de Janeiro",
+    "style": "Sun-soaked and body-confident: bright colours, beachwear worn into the city, crop tops, shorts and flip-flops, tropical prints, football-shirt street style."
+  },
+  {
+    "id": "lax",
+    "lat": 34.0522,
+    "lng": -118.2437,
+    "label": "Los Angeles",
+    "style": "Casual and image-conscious: athleisure, oversized hoodies and vintage tees, denim, sneaker culture, skate and surf influences, celebrity-driven streetwear."
+  },
+  {
+    "id": "jnb",
+    "lat": -26.2041,
+    "lng": 28.0473,
+    "label": "Johannesburg",
+    "style": "Expressive and proudly local: Afro-urban streetwear, Basotho blanket and Shweshwe prints reworked, bold tailoring, Izikhothane-influenced flash, amapiano-era fits."
+  },
+  {
+    "id": "mil",
+    "lat": 45.4642,
+    "lng": 9.19,
+    "label": "Milan",
+    "style": "Luxurious and impeccably tailored: sharp suiting, rich fabrics, leather goods, sprezzatura, polished shoes, confident colour and quality-first dressing."
+  },
+  {
+    "id": "seo",
+    "lat": 37.5665,
+    "lng": 126.978,
+    "label": "Seoul",
+    "style": "Trend-driven and coordinated: K-pop-influenced streetwear, oversized silhouettes, clean layered outfits, matching sets, statement sneakers, soft and minimalist palettes."
+  },
+  {
+    "id": "cph",
+    "lat": 55.6761,
+    "lng": 12.5683,
+    "label": "Copenhagen",
+    "style": "Playful Scandinavian minimalism: clean shapes with pops of colour and print, practical outerwear, bike-friendly dressing, sustainable and vintage pieces."
+  },
+  {
+    "id": "ber",
+    "lat": 52.52,
+    "lng": 13.405,
+    "label": "Berlin",
+    "style": "Dark, utilitarian and nightlife-ready: all-black, techno and club culture, workwear and military pieces, chunky boots, anti-fashion attitude."
+  },
+  {
+    "id": "sao",
+    "lat": -23.5505,
+    "lng": -46.6333,
+    "label": "São Paulo",
+    "style": "Urban and diverse: polished business looks beside skate and pixação-scene streetwear, Brazilian designer prints, sneakers, mixed cultural influences."
+  },
+  {
+    "id": "dxb",
+    "lat": 25.2048,
+    "lng": 55.2708,
+    "label": "Dubai",
+    "style": "Luxury and modest elegance: designer labels, flowing abayas and kanduras, statement sunglasses and jewellery, light fabrics for heat, high-shine glamour."
+  },
+  {
+    "id": "yyz",
+    "lat": 43.6532,
+    "lng": -79.3832,
+    "label": "Toronto",
+    "style": "Multicultural and practical: layered outerwear for cold winters, OVO and Drake-era streetwear, diverse cultural influences, clean casual city wear."
+  },
+  {
+    "id": "lad",
+    "lat": -8.839,
+    "lng": 13.2894,
+    "label": "Luanda",
+    "style": "Vibrant and rhythmic: bright samakaka and wax prints, kizomba and kuduro-influenced looks, tailored Angolan style, bold colour and confident accessories."
+  },
+  {
+    "id": "bom",
+    "lat": 19.076,
+    "lng": 72.8777,
+    "label": "Mumbai",
+    "style": "Colourful fusion of tradition and Bollywood: kurtas and sarees worn modern, Indo-western mixes, bright prints, light cottons for humidity, filmi glamour."
+  }
+]

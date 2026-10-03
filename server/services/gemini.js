@@ -133,6 +133,93 @@ The outfit to judge:`;
   return extractJson(response.text);
 }
 
+// City match is interactive (someone is waiting in front of the camera), so
+// its calls cap how long Gemini "thinks" before answering. The shortlist is a
+// rough first cut and needs very little; scoring gets more room.
+const SHORTLIST_CONFIG = { thinkingConfig: { thinkingBudget: 128 } };
+const CITY_MATCH_CONFIG = { thinkingConfig: { thinkingBudget: 512 } };
+
+/**
+ * City match, step 1: a quick text-only pass that reads the outfit and picks
+ * the `count` cities (from their style descriptions) it most resembles, so
+ * the slower photo comparison only has to look at a shortlist.
+ *
+ * cities: [{ id, label, style }]  ->  ["tyo", "seo", "ldn"]
+ */
+export async function shortlistCities(selfieBase64, selfieMimeType, cities, count = 3) {
+  const catalog = cities.map(({ id, label, style }) => ({ id, city: label, style }));
+  const prompt = `You are a fashion expert who knows how people dress in cities
+around the world. Here are the cities to choose from, each with a short
+description of its style, as JSON:
+${JSON.stringify(catalog, null, 2)}
+
+Look at the outfit in the photo and pick the ${count} cities whose style it most
+closely resembles, best match first. Judge the clothes and styling only, not
+the person or the background. Return ONLY a JSON object (no prose, no markdown
+fences):
+{ "cityIds": ["id1", "id2", "id3"] }`;
+
+  const response = await ai.models.generateContent({
+    model,
+    config: SHORTLIST_CONFIG,
+    contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: selfieMimeType, data: selfieBase64 } }] }],
+  });
+
+  const { cityIds } = extractJson(response.text);
+  return cityIds;
+}
+
+/**
+ * City match, step 2: compare the outfit against real reference photos from
+ * each shortlisted city (grouped by city, then by style) and score them.
+ *
+ * cityReferences: [{ city: "Tokyo", styles: [{ label: "Streetwear", images: [{ base64, mimeType }] }] }]
+ */
+export async function rateCityMatches(selfieBase64, selfieMimeType, cityReferences) {
+  const names = cityReferences.map((c) => c.city);
+  const styleLabels = [...new Set(cityReferences.flatMap((c) => c.styles.map((s) => s.label)))];
+  const prompt = `You are matching a person's outfit to the city whose fashion it
+fits best. The FIRST image is their outfit, captured just now. After it come
+real reference photos from ${names.length} cities (${names.join(", ")}),
+grouped by city and then by style (${styleLabels.join(", ")}); each group is
+introduced by its city and style.
+
+Score how well the outfit matches each city. An outfit that nails any one of a
+city's styles should score well there. Judge the clothes and styling only.
+Return ONLY a JSON object (no prose, no markdown fences):
+{
+  "matches": [
+    {
+      "city": "exactly one of: ${names.join(" | ")}",
+      "matchPercent": 1-100,
+      "closestStyle": "the style in that city it's closest to, exactly one of: ${styleLabels.join(" | ")}",
+      "reasoning": "1-2 sentences on what in the outfit matches this city"
+    }
+  ],
+  "verdict": "a short punchy one-liner about the best match, e.g. 'Straight off a Shibuya crossing'",
+  "tip": "one concrete suggestion to lean further into the best-matching city's style"
+}
+Include every city exactly once, best match first.
+
+The outfit:`;
+
+  const parts = [{ text: prompt }, { inlineData: { mimeType: selfieMimeType, data: selfieBase64 } }];
+  for (const { city, styles } of cityReferences) {
+    for (const { label, images } of styles) {
+      parts.push({ text: `${city} — ${label}:` });
+      for (const img of images) parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+    }
+  }
+
+  const response = await ai.models.generateContent({
+    model,
+    config: CITY_MATCH_CONFIG,
+    contents: [{ role: "user", parts }],
+  });
+
+  return extractJson(response.text);
+}
+
 /**
  * Outfit-rating bot: score a full-outfit photo (e.g. a selfie or a still
  * pulled from a live Vonage video session) and give feedback.

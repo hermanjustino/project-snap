@@ -49,29 +49,9 @@ let hoveredBiomeUid = null;
 let selectedBiomeUid = null;
 let biomeFeatures = [];
 
-const MARKERS = [
-  { id: "nyc", lat: 40.7128, lng: -74.006, label: "New York" },
-  { id: "ldn", lat: 51.5074, lng: -0.1278, label: "London" },
-  { id: "par", lat: 48.8566, lng: 2.3522, label: "Paris" },
-  { id: "lag", lat: 6.5244, lng: 3.3792, label: "Lagos" },
-  { id: "nbo", lat: -1.2921, lng: 36.8219, label: "Nairobi" },
-  { id: "tyo", lat: 35.6762, lng: 139.6503, label: "Tokyo" },
-  { id: "sha", lat: 31.2304, lng: 121.4737, label: "Shanghai" },
-  { id: "syd", lat: -33.8688, lng: 151.2093, label: "Sydney" },
-  { id: "rio", lat: -22.9068, lng: -43.1729, label: "Rio de Janeiro" },
-  { id: "lax", lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
-  { id: "jnb", lat: -26.2041, lng: 28.0473, label: "Johannesburg" },
-  // Milan completes the "Big Four" (with New York, London, Paris above).
-  { id: "mil", lat: 45.4642, lng: 9.19, label: "Milan" },
-  { id: "seo", lat: 37.5665, lng: 126.978, label: "Seoul" },
-  { id: "cph", lat: 55.6761, lng: 12.5683, label: "Copenhagen" },
-  { id: "ber", lat: 52.52, lng: 13.405, label: "Berlin" },
-  { id: "sao", lat: -23.5505, lng: -46.6333, label: "São Paulo" },
-  { id: "dxb", lat: 25.2048, lng: 55.2708, label: "Dubai" },
-  { id: "yyz", lat: 43.6532, lng: -79.3832, label: "Toronto" },
-  { id: "lad", lat: -8.839, lng: 13.2894, label: "Luanda" },
-  { id: "bom", lat: 19.076, lng: 72.8777, label: "Mumbai" },
-];
+// Cities live in a shared file so the server's city-match Fit Check uses the
+// same list (and each city's style description).
+const MARKERS = await fetch("/data/cities.json").then((res) => res.json());
 
 const DEFAULT_YEAR = 2025;
 const YEAR_MIN = 2015;
@@ -274,6 +254,7 @@ fetch("/data/world_regions.json")
 const markerGeometry = new THREE.SphereGeometry(1.6, 16, 16);
 const ringGeometry = new THREE.RingGeometry(2.2, 2.9, 32);
 const pulsingRings = [];
+const pinsById = new Map(); // city id -> { pin, ring }, for highlighting a match
 
 MARKERS.forEach((m) => {
   const pos = latLngToVector3(m.lat, m.lng, GLOBE_RADIUS, 0.5);
@@ -291,7 +272,24 @@ MARKERS.forEach((m) => {
   ring.lookAt(0, 0, 0);
   globeGroup.add(ring);
   pulsingRings.push(ring);
+  pinsById.set(m.id, { pin, ring });
 });
+
+// Makes one city's pin (e.g. the best city match) bigger with a wider pulse.
+let highlightedCityId = null;
+function highlightCity(id) {
+  const previous = pinsById.get(highlightedCityId);
+  if (previous) {
+    previous.pin.scale.setScalar(1);
+    previous.ring.userData.boost = 1;
+  }
+  highlightedCityId = id;
+  const next = pinsById.get(id);
+  if (next) {
+    next.pin.scale.setScalar(2);
+    next.ring.userData.boost = 2.2;
+  }
+}
 
 // --- Camera zoom: pinch, wheel and the +/- buttons all set a target
 // distance, and animate() eases the camera toward it every frame, so zooming
@@ -747,6 +745,7 @@ lightboxEl.addEventListener("click", (e) => {
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !lightboxEl.hidden) closeLightbox();
   if (e.key === "Escape" && !fitCheckPanel.hidden) closeFitCheck();
+  else if (e.key === "Escape" && !cityMatchCard.hidden) closeCityMatch();
 });
 
 // --- Live "Fit Check": direct browser camera access (getUserMedia, no
@@ -758,6 +757,7 @@ const fitCheckPublisherEl = document.getElementById("fitCheckPublisher");
 const fitCheckCaptureBtn = document.getElementById("fitCheckCapture");
 const fitCheckResultEl = document.getElementById("fitCheckResult");
 const fitCheckCloseBtn = document.getElementById("fitCheckClose");
+const cityMatchCard = document.getElementById("cityMatchCard");
 
 let fitCheckStream = null;
 let fitCheckContext = { city: null, year: null };
@@ -786,15 +786,18 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
-async function openFitCheck(city, year) {
-  fitCheckContext = { city, year };
-  fitCheckTitle.textContent = `Fit Check — ${city} ${year}`;
+// Opens the full-screen camera. `context` says what the capture is scored
+// against: { city, year }, { region }, or { mode: "city-match" }.
+async function openCamera(title, context) {
+  fitCheckContext = context;
+  fitCheckTitle.textContent = title;
   fitCheckResultEl.hidden = true;
   fitCheckResultEl.innerHTML = "";
   fitCheckCaptureBtn.disabled = true;
   fitCheckCaptureBtn.textContent = "Starting camera…";
   fitCheckPanel.hidden = false;
   popupEl.hidden = true; // step out of the way while the camera is up
+  cityMatchCard.hidden = true;
 
   try {
     fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
@@ -810,12 +813,31 @@ async function openFitCheck(city, year) {
     fitCheckPublisherEl.innerHTML = "";
     fitCheckPublisherEl.appendChild(videoEl);
 
+    // Only allow a capture once the camera is showing a picture; tapping
+    // earlier would score a black frame.
+    await new Promise((resolve) => {
+      if (videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) resolve();
+      else videoEl.addEventListener("loadeddata", resolve, { once: true });
+    });
     fitCheckCaptureBtn.disabled = false;
     fitCheckCaptureBtn.textContent = "📸 Capture & Score";
   } catch (err) {
     fitCheckResultEl.hidden = false;
     fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
   }
+}
+
+function openFitCheck(city, year) {
+  return openCamera(`Fit Check — ${city} ${year}`, { city, year });
+}
+
+function openRegionFitCheck(regionName) {
+  return openCamera(`Fit Check — ${regionName}`, { region: regionName });
+}
+
+function openCityMatch() {
+  highlightCity(null);
+  return openCamera("Which city matches your fit?", { mode: "city-match" });
 }
 
 function closeFitCheck() {
@@ -825,44 +847,11 @@ function closeFitCheck() {
   fitCheckPublisherEl.innerHTML = "";
 }
 
-async function openRegionFitCheck(regionName) {
-  fitCheckContext = { region: regionName };
-  fitCheckTitle.textContent = `Fit Check — ${regionName}`;
-  fitCheckResultEl.hidden = true;
-  fitCheckResultEl.innerHTML = "";
-  fitCheckCaptureBtn.disabled = true;
-  fitCheckCaptureBtn.textContent = "Starting camera…";
-  fitCheckPanel.hidden = false;
-  popupEl.hidden = true;
-
-  try {
-    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-
-    const videoEl = document.createElement("video");
-    videoEl.autoplay = true;
-    videoEl.muted = true;
-    videoEl.playsInline = true;
-    videoEl.style.width = "100%";
-    videoEl.style.height = "100%";
-    videoEl.style.objectFit = "cover";
-    videoEl.srcObject = fitCheckStream;
-    fitCheckPublisherEl.innerHTML = "";
-    fitCheckPublisherEl.appendChild(videoEl);
-
-    fitCheckCaptureBtn.disabled = false;
-    fitCheckCaptureBtn.textContent = "📸 Capture & Score";
-  } catch (err) {
-    fitCheckResultEl.hidden = false;
-    fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
-  }
-}
-
-
 fitCheckCloseBtn.addEventListener("click", closeFitCheck);
 
 fitCheckCaptureBtn.addEventListener("click", async () => {
   const videoEl = fitCheckPublisherEl.querySelector("video");
-  if (!videoEl) return;
+  if (!videoEl?.videoWidth) return; // camera hasn't produced a frame yet
 
   const canvas = document.createElement("canvas");
   canvas.width = videoEl.videoWidth || 640;
@@ -872,6 +861,11 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
 
   fitCheckResultEl.hidden = false;
   lastFitResult = null;
+
+  if (fitCheckContext.mode === "city-match") {
+    runCityMatch(photoDataUrl, videoEl);
+    return;
+  }
 
   let url = "/api/outfit/fit-check";
   const form = new FormData();
@@ -939,6 +933,138 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
     fitCheckCaptureBtn.disabled = false;
   }
 });
+
+// --- City match: "which city matches your fit?" ---
+
+// Shown one after another while the match runs (it takes 10-30s), roughly in
+// step with what the server is doing. The last one stays up until it's done.
+const CITY_MATCH_STEPS = [
+  "Reading your fit…",
+  `Checking it against ${MARKERS.length} cities…`,
+  "Pulling real street photos from your top 3…",
+  "Comparing runway, streetwear, everyday and heritage looks…",
+  "Scoring your matches…",
+];
+
+function showProgress(el, steps, intervalMs = 4000) {
+  let i = 0;
+  const render = () => {
+    el.innerHTML = `<div class="progress"><span class="spinner" aria-hidden="true"></span><p>${steps[i]}</p></div>`;
+  };
+  render();
+  const timer = setInterval(() => {
+    if (i < steps.length - 1) {
+      i++;
+      render();
+    }
+  }, intervalMs);
+  return () => clearInterval(timer);
+}
+
+async function runCityMatch(photoDataUrl, videoEl) {
+  videoEl.pause(); // freeze on the captured frame while it's scored
+  fitCheckCaptureBtn.disabled = true;
+  const stopProgress = showProgress(fitCheckResultEl, CITY_MATCH_STEPS);
+
+  try {
+    const form = new FormData();
+    form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
+    const res = await fetch("/api/outfit/city-match", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "City match failed");
+
+    stopProgress();
+    closeFitCheck();
+    showCityMatch(data, photoDataUrl);
+  } catch (err) {
+    stopProgress();
+    fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
+    videoEl.play();
+  } finally {
+    fitCheckCaptureBtn.disabled = false;
+  }
+}
+
+function showCityMatch(data, photoDataUrl) {
+  const [best, ...others] = data.matches;
+  highlightCity(best.id);
+  focusOnPoint(best.lat, best.lng, homeZ * 0.75);
+
+  lastFitResult = {
+    photoDataUrl,
+    scoreText: `${best.matchPercent}%`,
+    badgeLabel: "match",
+    headline: `My fit is ${best.matchPercent}% ${best.city}`,
+    subline: data.verdict,
+    context: `${best.city} ${best.closestStyle}`,
+    accent: scoreAccent(best.matchPercent),
+    shareText: `My fit is ${best.matchPercent}% ${best.city}. Which city is yours? ${SHARE_URL}`,
+  };
+
+  cityMatchCard.innerHTML = `
+    <button class="popup-close" data-action="close" aria-label="Close">×</button>
+    <p class="match-eyebrow">Your fit is</p>
+    <h2 class="match-headline">
+      <span class="match-pct" style="color: ${scoreAccent(best.matchPercent)}">${best.matchPercent}%</span> ${best.city}
+    </h2>
+    <p class="fit-closest">Closest to ${best.city} ${String(best.closestStyle).toLowerCase()}</p>
+    <p class="match-verdict">${data.verdict}</p>
+    <p class="fit-reasoning">${best.reasoning}</p>
+    ${
+      others.length
+        ? `<p class="match-runners-title">Also close</p>
+           <ul class="match-runners">
+             ${others
+               .map(
+                 (m) => `<li><button data-action="explore" data-city="${m.id}">
+                   <span class="runner-name">${m.city}</span>
+                   <span class="runner-bar"><span style="width: ${m.matchPercent}%"></span></span>
+                   <span class="runner-pct">${m.matchPercent}%</span>
+                 </button></li>`
+               )
+               .join("")}
+           </ul>`
+        : ""
+    }
+    <p class="fit-tip">💡 ${data.tip}</p>
+    <div class="match-actions">
+      <button class="share-fit-btn" data-action="share">${canShareFiles() ? "📤 Share" : "⬇️ Save image"}</button>
+      <div class="match-actions-row">
+        <button data-action="explore" data-city="${best.id}">Explore ${best.city}</button>
+        <button data-action="retry">Try again</button>
+      </div>
+    </div>
+  `;
+  cityMatchCard.hidden = false;
+  cityMatchCard.scrollTop = 0;
+}
+
+function closeCityMatch() {
+  cityMatchCard.hidden = true;
+  highlightCity(null);
+}
+
+cityMatchCard.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const { action, city } = btn.dataset;
+
+  if (action === "share") {
+    shareFitResult(btn);
+  } else if (action === "explore") {
+    const marker = MARKERS.find((m) => m.id === city);
+    closeCityMatch();
+    if (marker) showRegionPopup(marker);
+  } else if (action === "retry") {
+    closeCityMatch();
+    openCityMatch();
+  } else if (action === "close") {
+    closeCityMatch();
+    smoothResetView();
+  }
+});
+
+document.getElementById("cityMatchBtn").addEventListener("click", openCityMatch);
 
 // --- Sharing a fit check: the result is rendered onto a portrait image card
 // (photo + score + verdict + link) so it reads on its own when posted to a
@@ -1017,10 +1143,11 @@ async function buildShareCard(result) {
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "800 84px system-ui, -apple-system, sans-serif";
-  ctx.fillText(String(result.score), cx, cy - 10);
+  const scoreText = result.scoreText ?? String(result.score);
+  ctx.font = `800 ${scoreText.length > 3 ? 66 : 84}px system-ui, -apple-system, sans-serif`; // "100%" needs to fit
+  ctx.fillText(scoreText, cx, cy - 10);
   ctx.font = "600 30px system-ui, -apple-system, sans-serif";
-  ctx.fillText(`/ ${result.max}`, cx, cy + 52);
+  ctx.fillText(result.badgeLabel ?? `/ ${result.max}`, cx, cy + 52);
 
   // Text block.
   ctx.textAlign = "left";
@@ -1061,7 +1188,9 @@ async function shareFitResult(button) {
   try {
     const blob = await buildShareCard(lastFitResult);
     const file = new File([blob], "fitd-fit-check.jpg", { type: "image/jpeg" });
-    const text = `${lastFitResult.score}/${lastFitResult.max} — ${lastFitResult.headline}. Check your fit at ${SHARE_URL}`;
+    const text =
+      lastFitResult.shareText ??
+      `${lastFitResult.score}/${lastFitResult.max} — ${lastFitResult.headline}. Check your fit at ${SHARE_URL}`;
 
     if (navigator.canShare?.({ files: [file] })) {
       try {
@@ -1105,7 +1234,7 @@ function animate() {
   pulseTime += 0.03;
   const scale = 1 + (Math.sin(pulseTime) + 1) * 0.5;
   pulsingRings.forEach((ring) => {
-    ring.scale.set(scale, scale, scale);
+    ring.scale.setScalar(scale * (ring.userData.boost || 1));
     ring.material.opacity = 0.8 - (scale - 1) * 0.5;
   });
 

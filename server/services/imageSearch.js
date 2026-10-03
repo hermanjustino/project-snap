@@ -88,7 +88,19 @@ async function fetchSerperImages(query, limit) {
  * Downloads an image (e.g. one of the search results above) and returns it
  * as base64 + mime type, ready to hand to Gemini as inlineData.
  */
+const imageCache = new Map();
+const IMAGE_CACHE_MAX = 300; // ~10KB thumbnails, so a few MB at most
+
 export async function fetchImageAsBase64(url) {
+  const hit = imageCache.get(url);
+  if (hit) return hit;
+  const image = await downloadImage(url);
+  if (imageCache.size >= IMAGE_CACHE_MAX) imageCache.delete(imageCache.keys().next().value);
+  imageCache.set(url, image);
+  return image;
+}
+
+async function downloadImage(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to fetch image (${response.status})`);
 

@@ -50,15 +50,114 @@
     /* canvas is inline by default, which adds a baseline gap below it */
     #globeViz canvas { display: block; }
     #globeViz:active { cursor: grabbing; }
-    .hint {
+    .city-match-btn {
       position: fixed;
-      bottom: 1.5rem;
+      bottom: calc(1.5rem + env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
-      font-size: 0.8rem;
-      color: #8c7f63;
       z-index: 10;
+      padding: 0.85rem 1.6rem;
+      border: none;
+      border-radius: 999px;
+      background: #a8452b;
+      color: #f8f2e2;
+      font-size: 1rem;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(168, 69, 43, 0.35);
     }
+    .city-match-btn:active { transform: translateX(-50%) scale(0.97); }
+
+    /* City-match result: a bottom sheet, kept under half the screen so the
+       matched city (centered on the globe) stays visible above it. */
+    #cityMatchCard[hidden] { display: none; }
+    #cityMatchCard {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      z-index: 35;
+      width: min(440px, 100%);
+      max-height: 46dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+      background: #f8f2e2;
+      border: 1px solid #d9c9a3;
+      border-bottom: none;
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 -10px 30px rgba(74, 65, 48, 0.2);
+      color: #4a4130;
+      font-size: 0.85rem;
+    }
+    #cityMatchCard p { margin: 0.3rem 0 0; }
+    .match-eyebrow {
+      margin: 0 !important;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8c7f63;
+    }
+    .match-headline { margin: 0.1rem 0 0.2rem; font-size: 1.7rem; line-height: 1.15; }
+    .match-pct { font-weight: 800; }
+    .match-verdict { font-weight: 600; font-size: 0.95rem; }
+    #cityMatchCard .fit-reasoning { margin-top: 0.5rem; line-height: 1.5; }
+    .match-runners-title {
+      margin-top: 0.9rem !important;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8c7f63;
+    }
+    .match-runners { list-style: none; margin: 0.35rem 0 0; padding: 0; }
+    .match-runners button {
+      display: grid;
+      grid-template-columns: 7.5rem 1fr 2.6rem;
+      align-items: center;
+      gap: 0.6rem;
+      width: 100%;
+      padding: 0.35rem 0;
+      border: none;
+      background: none;
+      color: #4a4130;
+      font-size: 0.85rem;
+      text-align: left;
+      cursor: pointer;
+    }
+    .runner-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .runner-bar { height: 6px; border-radius: 999px; background: #ece1c8; overflow: hidden; }
+    .runner-bar span { display: block; height: 100%; border-radius: 999px; background: #c98a3b; }
+    .runner-pct { text-align: right; color: #8c7f63; font-variant-numeric: tabular-nums; }
+    .match-actions { margin-top: 0.4rem; }
+    .match-actions-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .match-actions-row button {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1px solid #d9c9a3;
+      border-radius: 999px;
+      background: #fff;
+      color: #4a4130;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .progress { display: flex; align-items: center; gap: 0.75rem; text-align: left; }
+    .progress p { margin: 0 !important; }
+    .spinner {
+      flex-shrink: 0;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 2.5px solid #d9c9a3;
+      border-top-color: #a8452b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     #markerTooltip {
       position: fixed;
       z-index: 20;
@@ -328,7 +427,8 @@
   </header>
 
   <div id="globeViz"></div>
-  <p class="hint">Drag to spin</p>
+  <button id="cityMatchBtn" class="city-match-btn">📸 Fit Check</button>
+  <div id="cityMatchCard" hidden></div>
   <p id="markerTooltip" hidden></p>
   <div id="regionPopup" hidden></div>
 
