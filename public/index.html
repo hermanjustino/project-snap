@@ -46,7 +46,9 @@
       font-size: 0.85rem;
       white-space: nowrap;
     }
-    #globeViz { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+    #globeViz { position: fixed; inset: 0; cursor: grab; touch-action: none; overflow: hidden; }
+    /* canvas is inline by default, which adds a baseline gap below it */
+    #globeViz canvas { display: block; }
     #globeViz:active { cursor: grabbing; }
     .hint {
       position: fixed;
@@ -105,6 +107,30 @@
       color: #4a4130;
     }
     #regionPopup h3 { margin: 0 0 0.6rem; }
+    .style-toggle {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.2rem;
+      margin-bottom: 0.6rem;
+      background: #ece1c8;
+      border-radius: 999px;
+    }
+    .style-toggle button {
+      flex: 1;
+      padding: 0.4rem 0.6rem;
+      border: none;
+      border-radius: 999px;
+      background: none;
+      color: #8c7f63;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .style-toggle button[aria-selected="true"] {
+      background: #f8f2e2;
+      color: #4a4130;
+      box-shadow: 0 1px 3px rgba(74, 65, 48, 0.2);
+    }
     #regionPopup p { margin: 0; font-size: 0.85rem; color: #8c7f63; }
     .popup-year {
       width: 100%;
@@ -202,12 +228,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: safe center;
       gap: 1rem;
       padding: 1.5rem;
       color: #f8f2e2;
       touch-action: pan-y;
+      /* the result card can be taller than a phone screen */
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
+    #fitCheckPanel > * { flex-shrink: 0; }
     #fitCheckPanel h3 { margin: 0; }
     #fitCheckPublisher {
       width: min(420px, 90vw);
@@ -253,6 +283,20 @@
     .fit-score-max { font-size: 0.85rem; opacity: 0.85; margin-left: 2px; }
     .fit-verdict { margin: 0 0 0.6rem; font-size: 1.3rem; font-weight: 700; }
     .fit-reasoning { text-align: left; line-height: 1.5; }
+    .share-fit-btn {
+      display: block;
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.7rem;
+      border: none;
+      border-radius: 999px;
+      background: #a8452b;
+      color: #f8f2e2;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .share-fit-btn:disabled { opacity: 0.6; cursor: wait; }
     .fit-tip {
       margin: 0.9rem 0 0;
       padding: 0.65rem 0.85rem;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { rateFitAgainstTrends, rateOutfit, suggestOutfit } from "../services/gemini.js";
-import { fetchImageAsBase64, searchFashionWeekImages } from "../services/imageSearch.js";
+import { STYLES, fetchImageAsBase64, searchFashionWeekImages } from "../services/imageSearch.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const router = Router();
@@ -44,12 +44,13 @@ router.post("/rate", upload.single("photo"), async (req, res) => {
 // Live "Style Check": a frame captured from a Vonage video session, scored
 // against real Fashion Week photos for the city/year the visitor is browsing.
 router.post("/fit-check", upload.single("photo"), async (req, res) => {
-  const { city, year } = req.body;
+  const { city, year, style = "runway" } = req.body;
   if (!req.file) return res.status(400).json({ error: "photo field is required" });
   if (!city || !year) return res.status(400).json({ error: "city and year fields are required" });
+  if (!STYLES.includes(style)) return res.status(400).json({ error: `style must be one of: ${STYLES.join(", ")}` });
 
   try {
-    const { images } = await searchFashionWeekImages(city, year, 4);
+    const { images } = await searchFashionWeekImages(city, year, 4, style);
 
     const referenceImages = [];
     for (const img of images.slice(0, 3)) {
@@ -60,11 +61,11 @@ router.post("/fit-check", upload.single("photo"), async (req, res) => {
       }
     }
     if (referenceImages.length === 0) {
-      return res.status(502).json({ error: "Couldn't load reference runway photos to compare against — try again." });
+      return res.status(502).json({ error: "Couldn't load reference photos to compare against — try again." });
     }
 
     const selfieBase64 = req.file.buffer.toString("base64");
-    const result = await rateFitAgainstTrends(selfieBase64, req.file.mimetype, referenceImages, city, year);
+    const result = await rateFitAgainstTrends(selfieBase64, req.file.mimetype, referenceImages, city, year, style);
     res.json({ ...result, comparedAgainst: referenceImages.length });
   } catch (err) {
     console.error("[outfit] fit-check failed:", err);

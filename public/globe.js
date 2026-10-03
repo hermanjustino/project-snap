@@ -174,12 +174,36 @@ const container = document.getElementById("globeViz");
 const tooltipEl = document.getElementById("markerTooltip");
 const popupEl = document.getElementById("regionPopup");
 
+// Mobile browsers restore the previous scroll/zoom on reload, which can
+// leave the full-screen globe shifted off-center.
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+window.scrollTo(0, 0);
+
+// Size from the container rather than window.innerWidth/innerHeight: on
+// phones those are still settling (address bar, restored zoom) at load time.
+function viewportSize() {
+  return {
+    width: container.clientWidth || window.innerWidth,
+    height: container.clientHeight || window.innerHeight,
+  };
+}
+
+// Camera distance at which the whole globe (plus a margin) fits on screen.
+// The FOV is vertical, so narrow portrait screens need the camera further back
+// or the sides of the globe get cropped.
+function fitCameraZ(aspect) {
+  const halfFov = THREE.MathUtils.degToRad(45 / 2);
+  return Math.max(280, (GLOBE_RADIUS + 15) / Math.tan(halfFov) / Math.min(aspect, 1));
+}
+
+const initialSize = viewportSize();
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 280;
+const camera = new THREE.PerspectiveCamera(45, initialSize.width / initialSize.height, 0.1, 2000);
+let homeZ = fitCameraZ(camera.aspect);
+camera.position.z = homeZ;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(initialSize.width, initialSize.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 container.appendChild(renderer.domElement);
 
@@ -434,7 +458,7 @@ function focusOnPoint(lat, lng, targetZ = 150) {
 
 function smoothResetView() {
   const startPos = camera.position.clone();
-  const targetPos = new THREE.Vector3(0, 0, 280);
+  const targetPos = new THREE.Vector3(0, 0, homeZ);
   const duration = 800;
   const startTime = performance.now();
 
@@ -506,13 +530,21 @@ function yearOptionsHtml(selectedYear) {
 
 let currentPopupMarker = null;
 let currentPopupFeature = null;
+let currentStyle = "runway";
+
+const STYLE_LABELS = { runway: "Fashion Week", streetwear: "Streetwear" };
 
 function showRegionPopup(marker) {
   currentPopupMarker = marker;
+  currentStyle = "runway";
   focusOnPoint(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
-    <h3>${marker.label} Fashion Week</h3>
+    <h3>${marker.label}</h3>
+    <div class="style-toggle" role="tablist" aria-label="Style">
+      <button role="tab" data-style="runway" aria-selected="true">Fashion Week</button>
+      <button role="tab" data-style="streetwear" aria-selected="false">Streetwear</button>
+    </div>
     <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
     <div class="popup-images"><p class="muted">Loading…</p></div>
     <button class="fit-check-btn">📸 Fit Check</button>
@@ -527,16 +559,29 @@ function showRegionPopup(marker) {
   const yearSelect = popupEl.querySelector(".popup-year");
   yearSelect.addEventListener("change", () => loadFashionWeekImages(marker.label, yearSelect.value));
 
+  popupEl.querySelectorAll(".style-toggle button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.style === currentStyle) return;
+      currentStyle = btn.dataset.style;
+      popupEl.querySelectorAll(".style-toggle button").forEach((b) => {
+        b.setAttribute("aria-selected", String(b === btn));
+      });
+      loadFashionWeekImages(marker.label, yearSelect.value);
+    });
+  });
+
   loadFashionWeekImages(marker.label, DEFAULT_YEAR);
 }
 
 async function loadFashionWeekImages(city, year) {
   const imagesEl = popupEl.querySelector(".popup-images");
   if (!imagesEl) return; // popup was closed/reopened before this resolved
-  imagesEl.innerHTML = `<p class="muted">Searching ${city} Fashion Week ${year}…</p>`;
+  const style = currentStyle;
+  imagesEl.innerHTML = `<p class="muted">Searching ${city} ${STYLE_LABELS[style]} ${year}…</p>`;
 
   try {
-    const res = await fetch(`/api/fashion-week?city=${encodeURIComponent(city)}&year=${encodeURIComponent(year)}`);
+    const params = new URLSearchParams({ city, year, style });
+    const res = await fetch(`/api/fashion-week?${params}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Search failed");
 
@@ -590,7 +635,7 @@ popupEl.addEventListener("click", (e) => {
 
   if (e.target.closest(".fit-check-btn") && currentPopupMarker) {
     const year = popupEl.querySelector(".popup-year")?.value || DEFAULT_YEAR;
-    openFitCheck(currentPopupMarker.label, year);
+    openFitCheck(currentPopupMarker.label, year, currentStyle);
   }
 
   if (e.target.closest(".biome-fit-check-btn") && currentPopupFeature) {
@@ -619,6 +664,7 @@ const fitCheckCloseBtn = document.getElementById("fitCheckClose");
 
 let fitCheckStream = null;
 let fitCheckContext = { city: null, year: null };
+let lastFitResult = null; // what the Share button turns into an image card
 
 // A vibrant, score-driven accent instead of one flat color for every result:
 // low scores read as a warm alert, high scores as a rich, celebratory glow.
@@ -643,9 +689,9 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
-async function openFitCheck(city, year) {
-  fitCheckContext = { city, year };
-  fitCheckTitle.textContent = `Fit Check — ${city} ${year}`;
+async function openFitCheck(city, year, style = "runway") {
+  fitCheckContext = { city, year, style };
+  fitCheckTitle.textContent = `Fit Check — ${city} ${STYLE_LABELS[style]} ${year}`;
   fitCheckResultEl.hidden = true;
   fitCheckResultEl.innerHTML = "";
   fitCheckCaptureBtn.disabled = true;
@@ -728,7 +774,8 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
   const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
   fitCheckResultEl.hidden = false;
-  
+  lastFitResult = null;
+
   let url = "/api/outfit/fit-check";
   const form = new FormData();
   form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
@@ -738,9 +785,10 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
     form.append("context", `Assess this outfit for suitability in the ${fitCheckContext.region} region. Consider local climate and cultural context.`);
     url = "/api/outfit/rate";
   } else {
-    fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} Fashion Week ${fitCheckContext.year}…</p>`;
+    fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} ${STYLE_LABELS[fitCheckContext.style]} ${fitCheckContext.year}…</p>`;
     form.append("city", fitCheckContext.city);
     form.append("year", fitCheckContext.year);
+    form.append("style", fitCheckContext.style);
   }
 
   fitCheckCaptureBtn.disabled = true;
@@ -751,12 +799,30 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
     if (!res.ok) throw new Error(data.error || "Fit check failed");
 
     if (fitCheckContext.region) {
+       lastFitResult = {
+         photoDataUrl,
+         score: data.score,
+         max: 10,
+         headline: data.vibe,
+         subline: data.oneLiner,
+         context: fitCheckContext.region,
+         accent: scoreAccent(data.score * 10),
+       };
        fitCheckResultEl.innerHTML = `
         <h3>${data.score}/10 — ${data.vibe}</h3>
         <p><em>${data.oneLiner}</em></p>
         <p><strong>Working:</strong> ${(data.highlights || []).join(", ")}</p>
         <p><strong>Try:</strong> ${(data.suggestions || []).join(", ")}</p>`;
     } else {
+       lastFitResult = {
+         photoDataUrl,
+         score: data.fitScore,
+         max: 100,
+         headline: data.verdict,
+         subline: data.tip,
+         context: `${fitCheckContext.city} ${STYLE_LABELS[fitCheckContext.style]} ${fitCheckContext.year}`,
+         accent: scoreAccent(data.fitScore),
+       };
        fitCheckResultEl.innerHTML = `
          <div class="fit-score-badge" style="background: ${scoreGradient(data.fitScore)}">
            <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
@@ -766,11 +832,166 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
          <p class="fit-tip">💡 ${data.tip}</p>
        `;
     }
+    fitCheckResultEl.insertAdjacentHTML(
+      "beforeend",
+      `<button class="share-fit-btn">${canShareFiles() ? "📤 Share" : "⬇️ Save image"}</button>`
+    );
   } catch (err) {
     fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
   } finally {
     fitCheckCaptureBtn.disabled = false;
   }
+});
+
+// --- Sharing a fit check: the result is rendered onto a portrait image card
+// (photo + score + verdict + link) so it reads on its own when posted to a
+// story or a group chat. ---
+const SHARE_URL = "https://thefitd.com";
+
+function canShareFiles() {
+  try {
+    const probe = new File([""], "probe.jpg", { type: "image/jpeg" });
+    return !!navigator.canShare?.({ files: [probe] });
+  } catch {
+    return false;
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function wrapLines(ctx, text, maxWidth) {
+  const lines = [];
+  let line = "";
+  for (const word of String(text || "").split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function buildShareCard(result) {
+  const W = 1080;
+  const H = 1350;
+  const PAD = 60;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#ece1c8";
+  ctx.fillRect(0, 0, W, H);
+
+  // Photo, cropped to fill a rounded frame.
+  const photo = await loadImage(result.photoDataUrl);
+  const frame = { x: PAD, y: PAD, w: W - PAD * 2, h: 760 };
+  const scale = Math.max(frame.w / photo.width, frame.h / photo.height);
+  const sw = frame.w / scale;
+  const sh = frame.h / scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(frame.x, frame.y, frame.w, frame.h, 36);
+  ctx.clip();
+  ctx.drawImage(photo, (photo.width - sw) / 2, (photo.height - sh) / 2, sw, sh, frame.x, frame.y, frame.w, frame.h);
+  ctx.restore();
+
+  // Score badge overlapping the photo's bottom-right corner.
+  const cx = W - PAD - 110;
+  const cy = frame.y + frame.h - 20;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 110, 0, Math.PI * 2);
+  ctx.fillStyle = result.accent;
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "#ece1c8";
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "800 84px system-ui, -apple-system, sans-serif";
+  ctx.fillText(String(result.score), cx, cy - 10);
+  ctx.font = "600 30px system-ui, -apple-system, sans-serif";
+  ctx.fillText(`/ ${result.max}`, cx, cy + 52);
+
+  // Text block.
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  let y = frame.y + frame.h + 120; // clears the score badge
+  ctx.fillStyle = "#8c7f63";
+  ctx.font = "600 32px system-ui, -apple-system, sans-serif";
+  ctx.fillText(`FIT CHECK · ${result.context}`.toUpperCase(), PAD, y);
+
+  y += 72;
+  ctx.fillStyle = "#4a4130";
+  ctx.font = "800 60px system-ui, -apple-system, sans-serif";
+  for (const line of wrapLines(ctx, result.headline, W - PAD * 2).slice(0, 2)) {
+    ctx.fillText(line, PAD, y);
+    y += 70;
+  }
+
+  ctx.fillStyle = "#6b5842";
+  ctx.font = "400 34px system-ui, -apple-system, sans-serif";
+  for (const line of wrapLines(ctx, result.subline, W - PAD * 2).slice(0, 3)) {
+    ctx.fillText(line, PAD, y);
+    y += 46;
+  }
+
+  ctx.fillStyle = "#a8452b";
+  ctx.font = "700 34px system-ui, -apple-system, sans-serif";
+  ctx.fillText("📸 thefitd.com", PAD, H - PAD);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+}
+
+async function shareFitResult(button) {
+  if (!lastFitResult) return;
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Preparing…";
+
+  try {
+    const blob = await buildShareCard(lastFitResult);
+    const file = new File([blob], "fitd-fit-check.jpg", { type: "image/jpeg" });
+    const text = `${lastFitResult.score}/${lastFitResult.max} — ${lastFitResult.headline}. Check your fit at ${SHARE_URL}`;
+
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "My fitd Fit Check", text });
+      } catch (err) {
+        if (err.name !== "AbortError") throw err; // user closing the sheet isn't an error
+      }
+      return;
+    }
+
+    // Desktop fallback: save the card so it can be posted anywhere.
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch (err) {
+    alert(`Couldn't share: ${err.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+fitCheckResultEl.addEventListener("click", (e) => {
+  const btn = e.target.closest(".share-fit-btn");
+  if (btn) shareFitResult(btn);
 });
 
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -793,19 +1014,31 @@ function animate() {
 }
 animate();
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+function resizeRenderer() {
+  const { width, height } = viewportSize();
+  if (!width || !height) return;
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(width, height);
+
+  // Keep the user's zoom level relative to the new "whole globe" distance.
+  const newHomeZ = fitCameraZ(camera.aspect);
+  camera.position.multiplyScalar(newHomeZ / homeZ);
+  homeZ = newHomeZ;
+}
+
+// ResizeObserver also catches the address bar showing/hiding and orientation
+// changes, which don't always fire a window resize on mobile.
+new ResizeObserver(resizeRenderer).observe(container);
 
 document.getElementById("zoomIn")?.addEventListener("click", () => {
   camera.position.z = Math.max(140, camera.position.z - 30);
 });
 document.getElementById("zoomOut")?.addEventListener("click", () => {
-  camera.position.z = Math.min(400, camera.position.z + 30);
+  camera.position.z = Math.min(Math.max(400, homeZ * 1.4), camera.position.z + 30);
 });
 document.getElementById("resetView")?.addEventListener("click", () => {
   globeGroup.rotation.set(0, 0, 0);
-  camera.position.z = 280;
+  camera.position.set(0, 0, homeZ);
+  camera.lookAt(0, 0, 0);
 });

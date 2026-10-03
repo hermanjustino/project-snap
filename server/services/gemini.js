@@ -96,12 +96,15 @@ array and explain what's missing in stylingNotes.`;
  * session) against a handful of real Fashion Week reference photos for a
  * given city/year, and score how well it fits in.
  */
-export async function rateFitAgainstTrends(selfieBase64, selfieMimeType, referenceImages, city, year) {
+export async function rateFitAgainstTrends(selfieBase64, selfieMimeType, referenceImages, city, year, style = "runway") {
+  const references =
+    style === "streetwear"
+      ? `real streetwear / street-style looks from ${city} in ${year}`
+      : `real runway/street looks from ${city} Fashion Week ${year}`;
   const prompt = `You are judging how well an outfit fits in with a city's
 current fashion scene. The FIRST image is a person's live outfit, captured
-just now. The remaining ${referenceImages.length} image(s) are real runway/
-street looks from ${city} Fashion Week ${year} — the trends it's being
-compared against.
+just now. The remaining ${referenceImages.length} image(s) are ${references}
+— the trends it's being compared against.
 
 Rate how well the first outfit would fit in among the reference looks.
 Return ONLY a JSON object (no prose, no markdown fences):

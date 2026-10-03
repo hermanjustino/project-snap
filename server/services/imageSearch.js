@@ -7,14 +7,19 @@ import "dotenv/config";
 const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const SERPER_IMAGES_URL = "https://google.serper.dev/images";
 
-export async function searchFashionWeekImages(city, year, limit = 8) {
+// "runway" searches the city's Fashion Week; "streetwear" searches what people
+// actually wear on its streets.
+export const STYLES = ["runway", "streetwear"];
+
+export async function searchFashionWeekImages(city, year, limit = 8, style = "runway") {
   if (!SERPER_API_KEY) {
     throw new Error(
       "SERPER_API_KEY is not set. Get a free key at https://serper.dev and add it to .env."
     );
   }
 
-  const query = `${city} Fashion Week ${year}`;
+  const query =
+    style === "streetwear" ? `${city} streetwear street style ${year}` : `${city} Fashion Week ${year}`;
   const response = await fetch(SERPER_IMAGES_URL, {
     method: "POST",
     headers: {
