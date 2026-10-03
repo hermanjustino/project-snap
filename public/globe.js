@@ -293,12 +293,74 @@ MARKERS.forEach((m) => {
   pulsingRings.push(ring);
 });
 
+// --- Camera zoom: pinch, wheel and the +/- buttons all set a target
+// distance, and animate() eases the camera toward it every frame, so zooming
+// glides instead of jumping. ---
+// Limits scale with the "whole globe" distance, so a narrow phone can't zoom
+// in until the screen is nothing but ground.
+const minDistance = () => Math.max(GLOBE_RADIUS + 40, homeZ * 0.45);
+const maxDistance = () => Math.max(400, homeZ * 1.4);
+const ZOOM_EASE = 0.18; // fraction of the remaining distance covered per frame
+
+let zoomTarget = null; // null = not zooming
+
+function currentZoom() {
+  return zoomTarget ?? camera.position.length();
+}
+
+function setZoomTarget(distance) {
+  cancelCameraTween();
+  zoomTarget = Math.min(maxDistance(), Math.max(minDistance(), distance));
+}
+
+function stepZoom() {
+  if (zoomTarget === null) return;
+  const distance = camera.position.length();
+  const next = distance + (zoomTarget - distance) * ZOOM_EASE;
+  if (Math.abs(zoomTarget - next) < 0.05) {
+    camera.position.setLength(zoomTarget);
+    zoomTarget = null;
+  } else {
+    camera.position.setLength(next);
+  }
+}
+
+// Fly-to animations (focusOnPoint / smoothResetView) bump this token; a newer
+// tween or a manual zoom cancels the running one instead of fighting it.
+let cameraTween = 0;
+function cancelCameraTween() {
+  cameraTween++;
+}
+
+// --- Touch/mouse gestures. Every active pointer is tracked so two fingers
+// become a pinch-zoom rather than two competing drags. ---
+const activePointers = new Map();
 let isDragging = false;
 let previousPointer = { x: 0, y: 0 };
+let pinchStart = null; // { distance, zoom }
+let suppressClick = false; // a drag or pinch shouldn't also count as a tap
+let downAt = { x: 0, y: 0 };
+
+function pointerDistance() {
+  const [a, b] = [...activePointers.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
 
 function onPointerDown(e) {
-  isDragging = true;
-  previousPointer = { x: e.clientX, y: e.clientY };
+  renderer.domElement.setPointerCapture?.(e.pointerId);
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activePointers.size === 1) {
+    isDragging = true;
+    suppressClick = false;
+    downAt = { x: e.clientX, y: e.clientY };
+    previousPointer = { x: e.clientX, y: e.clientY };
+  } else if (activePointers.size === 2) {
+    isDragging = false;
+    suppressClick = true;
+    tooltipEl.hidden = true;
+    pinchStart = { distance: pointerDistance(), zoom: currentZoom() };
+  }
 }
 
 function updateOverlayTexture() {
@@ -309,14 +371,29 @@ function updateOverlayTexture() {
 }
 
 function onPointerMove(e) {
+  if (activePointers.has(e.pointerId)) {
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  if (activePointers.size >= 2 && pinchStart) {
+    const distance = pointerDistance();
+    if (distance > 0) setZoomTarget(pinchStart.zoom * (pinchStart.distance / distance));
+    return;
+  }
+
   if (isDragging) {
+    if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) suppressClick = true;
+    // Rotate less per pixel when zoomed in, so the globe tracks the finger.
+    const speed = 0.005 * (camera.position.length() / homeZ);
     const deltaX = e.clientX - previousPointer.x;
     const deltaY = e.clientY - previousPointer.y;
-    globeGroup.rotation.y += deltaX * 0.005;
-    globeGroup.rotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, globeGroup.rotation.x + deltaY * 0.005));
+    globeGroup.rotation.y += deltaX * speed;
+    globeGroup.rotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, globeGroup.rotation.x + deltaY * speed));
     previousPointer = { x: e.clientX, y: e.clientY };
     return;
   }
+
+  if (e.pointerType === "touch") return; // hover tooltips are mouse-only
 
   const markerHit = raycastMarkers(e);
   const biomeHit = raycastBiomes(e);
@@ -348,8 +425,28 @@ function onPointerMove(e) {
   }
 }
 
-function onPointerUp() {
-  isDragging = false;
+function onPointerUp(e) {
+  activePointers.delete(e.pointerId);
+
+  if (activePointers.size === 1) {
+    // Going from a pinch back to one finger: carry on rotating from where
+    // that finger is now, rather than jumping from its old position.
+    pinchStart = null;
+    const [remaining] = activePointers.values();
+    previousPointer = { ...remaining };
+    isDragging = true;
+  } else if (activePointers.size === 0) {
+    pinchStart = null;
+    isDragging = false;
+  }
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  // Mouse wheels, trackpad scrolls and trackpad pinches (ctrlKey) all land
+  // here; exponential scaling makes each notch feel the same at any zoom.
+  const sensitivity = e.ctrlKey ? 0.01 : 0.0015;
+  setZoomTarget(currentZoom() * Math.exp(e.deltaY * sensitivity));
 }
 
 function raycastMarkers(e) {
@@ -410,6 +507,11 @@ function isPointInPolygon(point, geometry) {
 }
 
 function onClick(e) {
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
+
   const markerHit = raycastMarkers(e);
   if (markerHit) {
     showRegionPopup(markerHit.userData.marker);
@@ -428,7 +530,7 @@ function onClick(e) {
   }
 }
 
-function focusOnPoint(lat, lng, targetZ = 150) {
+function focusOnPoint(lat, lng, targetZ = Math.max(150, minDistance())) {
   // latLngToVector3 gives a position in the globe's own unrotated local
   // space. The globe can already be rotated from a manual drag, so that
   // local position has to be converted to its actual current world
@@ -440,8 +542,11 @@ function focusOnPoint(lat, lng, targetZ = 150) {
   const startPos = camera.position.clone();
   const duration = 1200;
   const startTime = performance.now();
+  zoomTarget = null;
+  const tween = ++cameraTween;
 
   function updateCamera(now) {
+    if (tween !== cameraTween) return; // interrupted by a newer tween or a zoom
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
     const easeT = 1 - Math.pow(1 - t, 3);
@@ -461,8 +566,11 @@ function smoothResetView() {
   const targetPos = new THREE.Vector3(0, 0, homeZ);
   const duration = 800;
   const startTime = performance.now();
+  zoomTarget = null;
+  const tween = ++cameraTween;
 
   function updateCamera(now) {
+    if (tween !== cameraTween) return; // interrupted by a newer tween or a zoom
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
     const easeT = 1 - Math.pow(1 - t, 3);
@@ -986,6 +1094,8 @@ fitCheckResultEl.addEventListener("click", (e) => {
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
 window.addEventListener("pointerup", onPointerUp);
+window.addEventListener("pointercancel", onPointerUp);
+renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 renderer.domElement.addEventListener("click", onClick);
 
 let pulseTime = 0;
@@ -999,6 +1109,7 @@ function animate() {
     ring.material.opacity = 0.8 - (scale - 1) * 0.5;
   });
 
+  stepZoom();
   renderer.render(scene, camera);
 }
 animate();
@@ -1013,6 +1124,7 @@ function resizeRenderer() {
   // Keep the user's zoom level relative to the new "whole globe" distance.
   const newHomeZ = fitCameraZ(camera.aspect);
   camera.position.multiplyScalar(newHomeZ / homeZ);
+  if (zoomTarget !== null) zoomTarget *= newHomeZ / homeZ;
   homeZ = newHomeZ;
 }
 
@@ -1020,14 +1132,9 @@ function resizeRenderer() {
 // changes, which don't always fire a window resize on mobile.
 new ResizeObserver(resizeRenderer).observe(container);
 
-document.getElementById("zoomIn")?.addEventListener("click", () => {
-  camera.position.z = Math.max(140, camera.position.z - 30);
-});
-document.getElementById("zoomOut")?.addEventListener("click", () => {
-  camera.position.z = Math.min(Math.max(400, homeZ * 1.4), camera.position.z + 30);
-});
+document.getElementById("zoomIn")?.addEventListener("click", () => setZoomTarget(currentZoom() * 0.8));
+document.getElementById("zoomOut")?.addEventListener("click", () => setZoomTarget(currentZoom() * 1.25));
 document.getElementById("resetView")?.addEventListener("click", () => {
   globeGroup.rotation.set(0, 0, 0);
-  camera.position.set(0, 0, homeZ);
-  camera.lookAt(0, 0, 0);
+  smoothResetView();
 });
