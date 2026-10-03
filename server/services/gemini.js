@@ -92,34 +92,38 @@ array and explain what's missing in stylingNotes.`;
 }
 
 /**
- * Live "Style Check": compare a captured frame (e.g. from a Vonage video
- * session) against a handful of real Fashion Week reference photos for a
- * given city/year, and score how well it fits in.
+ * Live "Fit Check": compare a captured frame against real reference photos of
+ * each style in a city (runway, streetwear, everyday, heritage) and score how
+ * well it fits in — plus which of those styles it's closest to.
+ *
+ * styleReferences: [{ label: "Streetwear", images: [{ base64, mimeType }] }]
  */
-export async function rateFitAgainstTrends(selfieBase64, selfieMimeType, referenceImages, city, year, style = "runway") {
-  const references =
-    style === "streetwear"
-      ? `real streetwear / street-style looks from ${city} in ${year}`
-      : `real runway/street looks from ${city} Fashion Week ${year}`;
-  const prompt = `You are judging how well an outfit fits in with a city's
-current fashion scene. The FIRST image is a person's live outfit, captured
-just now. The remaining ${referenceImages.length} image(s) are ${references}
-— the trends it's being compared against.
+export async function rateFitAgainstTrends(selfieBase64, selfieMimeType, styleReferences, city, year) {
+  const labels = styleReferences.map((s) => s.label);
+  const prompt = `You are judging how well an outfit fits in with ${city}'s
+fashion scene in ${year}. The FIRST image is a person's live outfit, captured
+just now. After it come real reference photos of different sides of ${city}'s
+style, grouped by style; each group is introduced by its style name. The
+styles are: ${labels.join(", ")}.
 
-Rate how well the first outfit would fit in among the reference looks.
-Return ONLY a JSON object (no prose, no markdown fences):
+Rate how well the outfit would fit in with ${city} overall: an outfit that
+nails any one of these styles should score well — it doesn't need to look
+like the runway. Return ONLY a JSON object (no prose, no markdown fences):
 {
   "fitScore": 1-100,
-  "verdict": "a short punchy one-line verdict, e.g. 'Runway ready' or 'Not quite ${city} yet'",
-  "reasoning": "2-3 sentences comparing the outfit to what's shown in the reference looks",
+  "closestStyle": "the one style it's closest to, exactly one of: ${labels.join(" | ")}",
+  "verdict": "a short punchy one-line verdict, e.g. 'Straight off a ${city} sidewalk' or 'Not quite ${city} yet'",
+  "reasoning": "2-3 sentences comparing the outfit to the reference looks, naming the styles it draws from",
   "tip": "one concrete suggestion to fit in better"
-}`;
+}
 
-  const parts = [
-    { text: prompt },
-    { inlineData: { mimeType: selfieMimeType, data: selfieBase64 } },
-    ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })),
-  ];
+The outfit to judge:`;
+
+  const parts = [{ text: prompt }, { inlineData: { mimeType: selfieMimeType, data: selfieBase64 } }];
+  for (const { label, images } of styleReferences) {
+    parts.push({ text: `${label} references from ${city}:` });
+    for (const img of images) parts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+  }
 
   const response = await ai.models.generateContent({
     model,

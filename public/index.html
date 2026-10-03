@@ -107,30 +107,6 @@
       color: #4a4130;
     }
     #regionPopup h3 { margin: 0 0 0.6rem; }
-    .style-toggle {
-      display: flex;
-      gap: 0.25rem;
-      padding: 0.2rem;
-      margin-bottom: 0.6rem;
-      background: #ece1c8;
-      border-radius: 999px;
-    }
-    .style-toggle button {
-      flex: 1;
-      padding: 0.4rem 0.6rem;
-      border: none;
-      border-radius: 999px;
-      background: none;
-      color: #8c7f63;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .style-toggle button[aria-selected="true"] {
-      background: #f8f2e2;
-      color: #4a4130;
-      box-shadow: 0 1px 3px rgba(74, 65, 48, 0.2);
-    }
     #regionPopup p { margin: 0; font-size: 0.85rem; color: #8c7f63; }
     .popup-year {
       width: 100%;
@@ -142,7 +118,16 @@
       color: #4a4130;
       font-size: 0.85rem;
     }
-    .popup-images {
+    .style-heading {
+      margin: 0.9rem 0 0.4rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8c7f63;
+    }
+    .style-heading:first-child { margin-top: 0; }
+    .style-images {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 0.4rem;
@@ -220,51 +205,70 @@
       cursor: pointer;
     }
     #fitCheckPanel[hidden] { display: none; }
+    /* Full-screen camera: the video fills the screen behind everything, the
+       title floats at the top, and the result + capture button stack at the
+       bottom. The result scrolls inside its own card, so the capture button
+       always stays on screen. */
     #fitCheckPanel {
       position: fixed;
       inset: 0;
       z-index: 50;
-      background: rgba(35, 30, 20, 0.9);
+      background: #000;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: safe center;
-      gap: 1rem;
-      padding: 1.5rem;
+      justify-content: flex-end;
+      gap: 0.9rem;
+      padding: 1rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
       color: #f8f2e2;
       touch-action: pan-y;
-      /* the result card can be taller than a phone screen */
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
     }
-    #fitCheckPanel > * { flex-shrink: 0; }
-    #fitCheckPanel h3 { margin: 0; }
+    #fitCheckPanel > * { position: relative; z-index: 1; flex-shrink: 0; }
+    #fitCheckPanel h3 {
+      position: absolute;
+      top: calc(1.4rem + env(safe-area-inset-top));
+      left: 1.25rem;
+      right: 4rem; /* leave room for the close button */
+      margin: 0;
+      font-size: 1rem;
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+    }
+    #fitCheckPanel .lightbox-close { position: fixed; z-index: 2; }
     #fitCheckPublisher {
-      width: min(420px, 90vw);
-      height: min(320px, 60vh);
+      position: absolute;
+      inset: 0;
+      z-index: 0;
       background: #000;
-      border-radius: 12px;
-      overflow: hidden;
     }
+    /* Mirror the live preview like a phone's selfie camera, so moving right
+       moves right on screen. The captured photo is drawn from the raw stream,
+       so it stays un-mirrored and logos/text on clothes read correctly. */
+    #fitCheckPublisher video { transform: scaleX(-1); }
     #fitCheckActions { display: flex; gap: 0.6rem; }
     #fitCheckActions button {
-      padding: 0.6rem 1.2rem;
+      padding: 0.85rem 1.6rem;
       border-radius: 999px;
-      border: 1px solid #d9c9a3;
+      border: none;
       background: #f8f2e2;
       color: #4a4130;
-      font-size: 0.85rem;
+      font-size: 1rem;
+      font-weight: 600;
       cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     }
-    #fitCheckActions button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #fitCheckActions button:disabled { opacity: 0.6; cursor: not-allowed; }
     #fitCheckResult {
-      width: min(420px, 90vw);
-      background: #f8f2e2;
+      width: min(420px, 100%);
+      max-height: 55dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: rgba(248, 242, 226, 0.96);
       color: #4a4130;
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 1.25rem;
       font-size: 0.85rem;
       text-align: center;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
     }
     #fitCheckResult p { margin: 0.3rem 0 0; color: #4a4130; }
     #fitCheckResult .muted { color: #8c7f63; }
@@ -282,6 +286,12 @@
     .fit-score-num { font-size: 2.1rem; font-weight: 800; line-height: 1; }
     .fit-score-max { font-size: 0.85rem; opacity: 0.85; margin-left: 2px; }
     .fit-verdict { margin: 0 0 0.6rem; font-size: 1.3rem; font-weight: 700; }
+    .fit-closest {
+      margin: -0.3rem 0 0.6rem !important;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #8c7f63 !important;
+    }
     .fit-reasoning { text-align: left; line-height: 1.5; }
     .share-fit-btn {
       display: block;
@@ -332,10 +342,10 @@
     <button class="lightbox-close" id="fitCheckClose" aria-label="Close">×</button>
     <h3 id="fitCheckTitle">Fit Check</h3>
     <div id="fitCheckPublisher"></div>
+    <div id="fitCheckResult" hidden></div>
     <div id="fitCheckActions">
       <button id="fitCheckCapture">📸 Capture &amp; Score</button>
     </div>
-    <div id="fitCheckResult" hidden></div>
   </div>
 
   <div class="controls">

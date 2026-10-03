@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { rateFitAgainstTrends, rateOutfit, suggestOutfit } from "../services/gemini.js";
-import { STYLES, fetchImageAsBase64, searchFashionWeekImages } from "../services/imageSearch.js";
+import { fetchImageAsBase64, searchCityStyles } from "../services/imageSearch.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 const router = Router();
@@ -41,32 +41,36 @@ router.post("/rate", upload.single("photo"), async (req, res) => {
   }
 });
 
-// Live "Style Check": a frame captured from a Vonage video session, scored
-// against real Fashion Week photos for the city/year the visitor is browsing.
+// Live "Fit Check": a frame captured from the camera, scored against real
+// photos of every style in the city (runway, streetwear, everyday, heritage)
+// for the year the visitor is browsing.
+const REFERENCES_PER_STYLE = 2;
+
 router.post("/fit-check", upload.single("photo"), async (req, res) => {
-  const { city, year, style = "runway" } = req.body;
+  const { city, year } = req.body;
   if (!req.file) return res.status(400).json({ error: "photo field is required" });
   if (!city || !year) return res.status(400).json({ error: "city and year fields are required" });
-  if (!STYLES.includes(style)) return res.status(400).json({ error: `style must be one of: ${STYLES.join(", ")}` });
 
   try {
-    const { images } = await searchFashionWeekImages(city, year, 4, style);
+    const sections = await searchCityStyles(city, year);
 
-    const referenceImages = [];
-    for (const img of images.slice(0, 3)) {
-      try {
-        referenceImages.push(await fetchImageAsBase64(img.thumbnailUrl));
-      } catch (err) {
-        console.warn("[outfit] skipping unfetchable reference image:", err.message);
-      }
-    }
-    if (referenceImages.length === 0) {
+    // Fetch each style's references in parallel; skip any that won't download.
+    const styleReferences = await Promise.all(
+      sections.map(async ({ label, images }) => {
+        const fetched = await Promise.allSettled(
+          images.slice(0, REFERENCES_PER_STYLE).map((img) => fetchImageAsBase64(img.thumbnailUrl))
+        );
+        return { label, images: fetched.filter((r) => r.status === "fulfilled").map((r) => r.value) };
+      })
+    );
+    const usable = styleReferences.filter((s) => s.images.length > 0);
+    if (usable.length === 0) {
       return res.status(502).json({ error: "Couldn't load reference photos to compare against — try again." });
     }
 
     const selfieBase64 = req.file.buffer.toString("base64");
-    const result = await rateFitAgainstTrends(selfieBase64, req.file.mimetype, referenceImages, city, year, style);
-    res.json({ ...result, comparedAgainst: referenceImages.length });
+    const result = await rateFitAgainstTrends(selfieBase64, req.file.mimetype, usable, city, year);
+    res.json({ ...result, comparedAgainst: usable.reduce((n, s) => n + s.images.length, 0) });
   } catch (err) {
     console.error("[outfit] fit-check failed:", err);
     res.status(500).json({ error: "Failed to run fit check", detail: String(err.message || err) });

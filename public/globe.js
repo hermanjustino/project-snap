@@ -530,21 +530,12 @@ function yearOptionsHtml(selectedYear) {
 
 let currentPopupMarker = null;
 let currentPopupFeature = null;
-let currentStyle = "runway";
-
-const STYLE_LABELS = { runway: "Fashion Week", streetwear: "Streetwear" };
-
 function showRegionPopup(marker) {
   currentPopupMarker = marker;
-  currentStyle = "runway";
   focusOnPoint(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
-    <h3>${marker.label}</h3>
-    <div class="style-toggle" role="tablist" aria-label="Style">
-      <button role="tab" data-style="runway" aria-selected="true">Fashion Week</button>
-      <button role="tab" data-style="streetwear" aria-selected="false">Streetwear</button>
-    </div>
+    <h3>${marker.label} Style</h3>
     <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
     <div class="popup-images"><p class="muted">Loading…</p></div>
     <button class="fit-check-btn">📸 Fit Check</button>
@@ -559,47 +550,45 @@ function showRegionPopup(marker) {
   const yearSelect = popupEl.querySelector(".popup-year");
   yearSelect.addEventListener("change", () => loadFashionWeekImages(marker.label, yearSelect.value));
 
-  popupEl.querySelectorAll(".style-toggle button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.style === currentStyle) return;
-      currentStyle = btn.dataset.style;
-      popupEl.querySelectorAll(".style-toggle button").forEach((b) => {
-        b.setAttribute("aria-selected", String(b === btn));
-      });
-      loadFashionWeekImages(marker.label, yearSelect.value);
-    });
-  });
-
   loadFashionWeekImages(marker.label, DEFAULT_YEAR);
 }
 
 async function loadFashionWeekImages(city, year) {
   const imagesEl = popupEl.querySelector(".popup-images");
   if (!imagesEl) return; // popup was closed/reopened before this resolved
-  const style = currentStyle;
-  imagesEl.innerHTML = `<p class="muted">Searching ${city} ${STYLE_LABELS[style]} ${year}…</p>`;
+  imagesEl.innerHTML = `<p class="muted">Searching ${city} style, ${year}…</p>`;
 
   try {
-    const params = new URLSearchParams({ city, year, style });
+    const params = new URLSearchParams({ city, year });
     const res = await fetch(`/api/fashion-week?${params}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Search failed");
 
-    if (!data.images?.length) {
+    const sections = (data.sections || []).filter((section) => section.images.length);
+    if (!sections.length) {
       imagesEl.innerHTML = `<p class="muted">No images found for ${city} ${year}.</p>`;
       return;
     }
 
-    imagesEl.innerHTML = data.images
-      .map((img) => {
-        const alt = img.title || `${city} ${year}`;
-        return `<img
-          src="${img.thumbnailUrl}"
-          data-full="${img.imageUrl}"
-          data-source="${img.source || img.imageUrl}"
-          alt="${alt}"
-          loading="lazy" />`;
-      })
+    // One labelled row per style (Runway, Streetwear, Everyday, Heritage).
+    imagesEl.innerHTML = sections
+      .map(
+        (section) => `
+          <h4 class="style-heading">${section.label}</h4>
+          <div class="style-images">
+            ${section.images
+              .map((img) => {
+                const alt = img.title || `${city} ${section.label}`;
+                return `<img
+                  src="${img.thumbnailUrl}"
+                  data-full="${img.imageUrl}"
+                  data-source="${img.source || img.imageUrl}"
+                  alt="${alt}"
+                  loading="lazy" />`;
+              })
+              .join("")}
+          </div>`
+      )
       .join("");
   } catch (err) {
     imagesEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
@@ -635,7 +624,7 @@ popupEl.addEventListener("click", (e) => {
 
   if (e.target.closest(".fit-check-btn") && currentPopupMarker) {
     const year = popupEl.querySelector(".popup-year")?.value || DEFAULT_YEAR;
-    openFitCheck(currentPopupMarker.label, year, currentStyle);
+    openFitCheck(currentPopupMarker.label, year);
   }
 
   if (e.target.closest(".biome-fit-check-btn") && currentPopupFeature) {
@@ -689,9 +678,9 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
-async function openFitCheck(city, year, style = "runway") {
-  fitCheckContext = { city, year, style };
-  fitCheckTitle.textContent = `Fit Check — ${city} ${STYLE_LABELS[style]} ${year}`;
+async function openFitCheck(city, year) {
+  fitCheckContext = { city, year };
+  fitCheckTitle.textContent = `Fit Check — ${city} ${year}`;
   fitCheckResultEl.hidden = true;
   fitCheckResultEl.innerHTML = "";
   fitCheckCaptureBtn.disabled = true;
@@ -700,7 +689,7 @@ async function openFitCheck(city, year, style = "runway") {
   popupEl.hidden = true; // step out of the way while the camera is up
 
   try {
-    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
 
     const videoEl = document.createElement("video");
     videoEl.autoplay = true;
@@ -739,7 +728,7 @@ async function openRegionFitCheck(regionName) {
   popupEl.hidden = true;
 
   try {
-    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
 
     const videoEl = document.createElement("video");
     videoEl.autoplay = true;
@@ -785,10 +774,9 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
     form.append("context", `Assess this outfit for suitability in the ${fitCheckContext.region} region. Consider local climate and cultural context.`);
     url = "/api/outfit/rate";
   } else {
-    fitCheckResultEl.innerHTML = `<p class="muted">Scoring your fit against ${fitCheckContext.city} ${STYLE_LABELS[fitCheckContext.style]} ${fitCheckContext.year}…</p>`;
+    fitCheckResultEl.innerHTML = `<p class="muted">Comparing your fit to ${fitCheckContext.city}'s runway, streetwear, everyday and heritage style…</p>`;
     form.append("city", fitCheckContext.city);
     form.append("year", fitCheckContext.year);
-    form.append("style", fitCheckContext.style);
   }
 
   fitCheckCaptureBtn.disabled = true;
@@ -820,7 +808,7 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
          max: 100,
          headline: data.verdict,
          subline: data.tip,
-         context: `${fitCheckContext.city} ${STYLE_LABELS[fitCheckContext.style]} ${fitCheckContext.year}`,
+         context: data.closestStyle ? `${fitCheckContext.city} ${data.closestStyle}` : fitCheckContext.city,
          accent: scoreAccent(data.fitScore),
        };
        fitCheckResultEl.innerHTML = `
@@ -828,6 +816,7 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
            <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
          </div>
          <h4 class="fit-verdict" style="color: ${scoreAccent(data.fitScore)}">${data.verdict}</h4>
+         ${data.closestStyle ? `<p class="fit-closest">Closest to ${fitCheckContext.city} ${data.closestStyle.toLowerCase()}</p>` : ""}
          <p class="fit-reasoning">${data.reasoning}</p>
          <p class="fit-tip">💡 ${data.tip}</p>
        `;
