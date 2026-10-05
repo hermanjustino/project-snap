@@ -758,6 +758,9 @@ const fitCheckCaptureBtn = document.getElementById("fitCheckCapture");
 const fitCheckResultEl = document.getElementById("fitCheckResult");
 const fitCheckCloseBtn = document.getElementById("fitCheckClose");
 const cityMatchCard = document.getElementById("cityMatchCard");
+const countdownEl = document.getElementById("fitCheckCountdown");
+const flashEl = document.getElementById("fitCheckFlash");
+const timerButtons = [...document.querySelectorAll(".timer-toggle button")];
 
 let fitCheckStream = null;
 let fitCheckContext = { city: null, year: null };
@@ -789,6 +792,7 @@ function dataUrlToBlob(dataUrl) {
 // Opens the full-screen camera. `context` says what the capture is scored
 // against: { city, year }, { region }, or { mode: "city-match" }.
 async function openCamera(title, context) {
+  cancelCountdown();
   fitCheckContext = context;
   fitCheckTitle.textContent = title;
   fitCheckResultEl.hidden = true;
@@ -820,7 +824,7 @@ async function openCamera(title, context) {
       else videoEl.addEventListener("loadeddata", resolve, { once: true });
     });
     fitCheckCaptureBtn.disabled = false;
-    fitCheckCaptureBtn.textContent = "📸 Capture & Score";
+    fitCheckCaptureBtn.textContent = captureLabel();
   } catch (err) {
     fitCheckResultEl.hidden = false;
     fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
@@ -841,6 +845,7 @@ function openCityMatch() {
 }
 
 function closeFitCheck() {
+  cancelCountdown();
   fitCheckPanel.hidden = true;
   fitCheckStream?.getTracks().forEach((track) => track.stop());
   fitCheckStream = null;
@@ -849,9 +854,104 @@ function closeFitCheck() {
 
 fitCheckCloseBtn.addEventListener("click", closeFitCheck);
 
-fitCheckCaptureBtn.addEventListener("click", async () => {
+// --- Capture timer: take the photo now, or after a 3s / 5s countdown so
+// people can step back and get their whole outfit in frame. ---
+const TIMER_CHOICES = [0, 3, 5];
+const TIMER_STORAGE_KEY = "fitd.captureTimer";
+
+let captureTimer = 0;
+try {
+  const saved = Number(localStorage.getItem(TIMER_STORAGE_KEY));
+  if (TIMER_CHOICES.includes(saved)) captureTimer = saved;
+} catch {
+  /* storage blocked (e.g. private mode) — default to no timer */
+}
+
+function captureLabel() {
+  return captureTimer ? `⏱ Capture in ${captureTimer}s` : "📸 Capture & Score";
+}
+
+function renderTimerToggle() {
+  timerButtons.forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.timer) === captureTimer)));
+}
+renderTimerToggle();
+
+timerButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    captureTimer = Number(button.dataset.timer);
+    try {
+      localStorage.setItem(TIMER_STORAGE_KEY, String(captureTimer));
+    } catch {
+      /* not remembered, but still applies for this session */
+    }
+    renderTimerToggle();
+    if (!fitCheckCaptureBtn.disabled) fitCheckCaptureBtn.textContent = captureLabel();
+  });
+});
+
+let countdownInterval = null;
+
+function showCountdownNumber(n) {
+  countdownEl.textContent = n;
+  countdownEl.classList.remove("tick");
+  void countdownEl.offsetWidth; // restart the pop animation for each number
+  countdownEl.classList.add("tick");
+}
+
+function startCountdown(seconds, onDone) {
+  // Driven by the clock rather than by counting ticks, so a busy or throttled
+  // main thread can delay a frame but not the photo itself.
+  const endsAt = performance.now() + seconds * 1000;
+  let shown = seconds;
+  fitCheckResultEl.hidden = true; // clear the view so they can pose
+  countdownEl.hidden = false;
+  showCountdownNumber(shown);
+  fitCheckCaptureBtn.textContent = "Cancel";
+  timerButtons.forEach((b) => (b.disabled = true));
+
+  countdownInterval = setInterval(() => {
+    const remaining = Math.ceil((endsAt - performance.now()) / 1000);
+    if (remaining <= 0) {
+      cancelCountdown();
+      onDone();
+    } else if (remaining !== shown) {
+      shown = remaining;
+      showCountdownNumber(shown);
+    }
+  }, 100);
+}
+
+function cancelCountdown() {
+  if (countdownInterval === null) return;
+  clearInterval(countdownInterval);
+  countdownInterval = null;
+  countdownEl.hidden = true;
+  timerButtons.forEach((b) => (b.disabled = false));
+  fitCheckCaptureBtn.textContent = captureLabel();
+}
+
+function flashCamera() {
+  flashEl.classList.remove("flash");
+  void flashEl.offsetWidth;
+  flashEl.classList.add("flash");
+}
+
+fitCheckCaptureBtn.addEventListener("click", () => {
+  if (countdownInterval !== null) {
+    cancelCountdown();
+    return;
+  }
   const videoEl = fitCheckPublisherEl.querySelector("video");
   if (!videoEl?.videoWidth) return; // camera hasn't produced a frame yet
+
+  if (captureTimer) startCountdown(captureTimer, captureAndScore);
+  else captureAndScore();
+});
+
+async function captureAndScore() {
+  const videoEl = fitCheckPublisherEl.querySelector("video");
+  if (!videoEl?.videoWidth) return; // camera closed or stopped mid-countdown
+  flashCamera();
 
   const canvas = document.createElement("canvas");
   canvas.width = videoEl.videoWidth || 640;
@@ -932,7 +1032,7 @@ fitCheckCaptureBtn.addEventListener("click", async () => {
   } finally {
     fitCheckCaptureBtn.disabled = false;
   }
-});
+}
 
 // --- City match: "which city matches your fit?" ---
 
@@ -1230,6 +1330,9 @@ renderer.domElement.addEventListener("click", onClick);
 let pulseTime = 0;
 function animate() {
   requestAnimationFrame(animate);
+  // The full-screen camera covers the globe; don't spend phone battery (or
+  // starve the capture countdown) drawing something nobody can see.
+  if (!fitCheckPanel.hidden) return;
 
   pulseTime += 0.03;
   const scale = 1 + (Math.sin(pulseTime) + 1) * 0.5;
