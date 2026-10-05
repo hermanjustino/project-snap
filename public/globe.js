@@ -1,53 +1,18 @@
-// Phase 2 of the globe: ported from a raw Three.js component (React/Next.js
-// removed — hooks/JSX/Tailwind/lucide-react stripped out, but the actual
-// scene/texture/interaction logic is framework-agnostic and kept as-is).
-// Recolored from the original's dark slate/blue theme to fitd's
-// beige palette. Grid + land are baked into a canvas texture instead of
-// drawn as separate scene objects, which sidesteps the async-scene-graph
-// timing issue we hit with the previous globe.gl-based graticule fix.
+// fitd's home page: a Three.js globe with a pin for each city. Tapping a pin
+// opens that city's style popup; the Fit Check button matches the visitor's
+// outfit to a city.
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
 const GLOBE_RADIUS = 80;
-const EARTH_TEXTURE_URL = "https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg";
-const GRID_COLOR = "rgba(107, 88, 66, 0.25)";
-const LAND_COLOR = "rgba(183, 161, 121, 0.4)";
-const LAND_STROKE = "rgba(107, 88, 66, 0.4)";
-const DESERT_COLOR = "rgba(227, 213, 184, 0.5)";
-const FOREST_COLOR = "rgba(125, 140, 107, 0.5)";
-const MARINE_COLOR = "rgba(64, 224, 208, 0.6)"; // Turquoise for reefs
-const SAVANNA_COLOR = "rgba(210, 180, 140, 0.6)"; // Tan for grasslands
-const WETLAND_COLOR = "rgba(46, 139, 87, 0.6)"; // Sea green for wetlands
-const BIOME_HOVER_COLOR = "rgba(255, 165, 0, 0.7)"; // Orange highlight
-const ATMOSPHERE_COLOR = 0xf4ead2;
 const MARKER_COLOR = "#a8452b";
 
-// Biome clothing advice
-const BIOME_ADVICE = {
-  desert: {
-    title: "Desert Safety",
-    advice: "Wear loose, light-colored long sleeves and pants to protect from UV rays and heat stroke. A wide-brimmed hat and polarized sunglasses are essential. Avoid cotton; choose moisture-wicking fabrics."
-  },
-  forest: {
-    title: "Rainforest Safety",
-    advice: "Wear breathable, quick-dry clothing treated with permethrin to prevent insect-borne diseases (Malaria/Dengue). Long sleeves and tucked-in pants protect against leeches and thorns. Waterproof boots are a must."
-  },
-  marine: {
-    title: "Marine/Reef Safety",
-    advice: "Wear a UPF 50+ rash guard and swim leggings to protect against intense UV reflection and stinging jellyfish. Use reef-safe sunscreen. Sturdy water shoes protect against sharp coral and stonefish."
-  },
-  savanna: {
-    title: "Savanna/Grassland Safety",
-    advice: "Wear neutral-colored (khaki, tan, olive) clothing to blend in and avoid attracting tsetse flies (which like dark/bright colors). High-top boots and thick socks protect against ticks and tall grass. Layers are key for temperature shifts."
-  },
-  wetland: {
-    title: "Wetland Safety",
-    advice: "Wear waterproof boots and quick-dry, breathable fabrics. High-strength insect repellent and long sleeves are critical to prevent mosquito-borne illnesses. Be cautious of uneven underwater terrain and sharp marsh grasses."
-  }
+// Skeleton globe: a solid sphere drawn with latitude/longitude lines only.
+const SKELETON = {
+  sphereColor: 0xf1e6cc,
+  lineColor: "rgba(107, 88, 66, 0.45)",
+  equatorColor: "rgba(168, 69, 43, 0.55)",
+  haloColor: 0xf4ead2,
 };
-
-let hoveredBiomeUid = null;
-let selectedBiomeUid = null;
-let biomeFeatures = [];
 
 // Cities live in a shared file so the server's city-match Fit Check uses the
 // same list (and each city's style description).
@@ -68,85 +33,37 @@ function latLngToVector3(lat, lng, radius, alt = 0) {
   );
 }
 
-function generateGlobeTexture(landFeatures, hoverUid = null, selectUid = null) {
-  const width = 2048;
-  const height = 1024;
+// Latitude/longitude lines every 15°, painted onto a transparent canvas that
+// wraps the sphere (equirectangular: x = longitude, y = latitude). The equator
+// is drawn heavier so the globe's orientation reads at a glance.
+function buildGraticuleTexture() {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = 2048;
+  canvas.height = 1024;
   const ctx = canvas.getContext("2d");
+  const step = 15;
 
-  // Make the background transparent so the Earth map shows through
-  ctx.clearRect(0, 0, width, height);
-
-  ctx.strokeStyle = GRID_COLOR;
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= width; x += width / 36) {
+  const line = (x1, y1, x2, y2, color, width) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
+  };
+
+  for (let lng = -180; lng <= 180; lng += step) {
+    const x = ((lng + 180) / 360) * canvas.width;
+    line(x, 0, x, canvas.height, SKELETON.lineColor, 1.5);
   }
-  for (let y = 0; y <= height; y += height / 18) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
-  }
-
-  if (landFeatures?.features) {
-    const projectCoords = ([lng, lat]) => [((lng + 180) / 360) * width, ((90 - lat) / 180) * height];
-
-    landFeatures.features.forEach((feature) => {
-      const geometry = feature.geometry;
-      if (!geometry) return;
-
-      const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
-      const isBiome = type.includes("desert") || type.includes("forest") || type.includes("marine") || type.includes("grassland") || type.includes("wetland");
-      const uid = feature.properties?.name || feature.properties?.code;
-
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = LAND_STROKE;
-
-      if (isBiome) {
-        if (uid === selectUid) {
-          ctx.strokeStyle = "#000000"; // Black outline on click
-          ctx.lineWidth = 4;
-          ctx.fillStyle = BIOME_HOVER_COLOR;
-        } else if (uid === hoverUid) {
-          ctx.fillStyle = BIOME_HOVER_COLOR; // Orange highlight on hover
-        } else {
-          ctx.fillStyle = type.includes("desert") ? DESERT_COLOR : 
-                          type.includes("forest") ? FOREST_COLOR : 
-                          type.includes("marine") ? MARINE_COLOR : 
-                          type.includes("grassland") ? SAVANNA_COLOR : WETLAND_COLOR;
-        }
-      } else {
-        ctx.fillStyle = LAND_COLOR;
-      }
-
-      const polygons =
-        geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
-
-      polygons.forEach((polygon) => {
-        polygon.forEach((ring) => {
-          ctx.beginPath();
-          ring.forEach((coord, i) => {
-            const [x, y] = projectCoords(coord);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          });
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-        });
-      });
-    });
+  for (let lat = -90 + step; lat < 90; lat += step) {
+    const y = ((90 - lat) / 180) * canvas.height;
+    const isEquator = lat === 0;
+    line(0, y, canvas.width, y, isEquator ? SKELETON.equatorColor : SKELETON.lineColor, isEquator ? 3 : 1.5);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 4;
   return texture;
 }
 
@@ -195,61 +112,25 @@ const dirLight = new THREE.DirectionalLight(0xf4ead2, 1.2);
 dirLight.position.set(200, 100, 150);
 scene.add(dirLight);
 
-const textureLoader = new THREE.TextureLoader();
-textureLoader.setCrossOrigin("anonymous");
-
-const sphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
-const sphereMaterial = new THREE.MeshPhongMaterial({
-  color: 0xcdba90, // Fallback ocean color if texture fails
-  shininess: 8,
-});
-const globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
-globeGroup.add(globeMesh);
-
-textureLoader.load(
-  EARTH_TEXTURE_URL,
-  (texture) => {
-    sphereMaterial.map = texture;
-    sphereMaterial.color.set(0xffffff); // Clear fallback color
-    sphereMaterial.needsUpdate = true;
-  },
-  undefined,
-  (err) => console.error("Error loading Earth texture:", err)
+// Solid core, the graticule just above its surface, and a soft halo behind.
+globeGroup.add(
+  new THREE.Mesh(
+    new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64),
+    new THREE.MeshLambertMaterial({ color: SKELETON.sphereColor })
+  )
 );
-
-const overlayGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 0.2, 64, 64);
-const overlayMaterial = new THREE.MeshPhongMaterial({
-  map: generateGlobeTexture(),
-  transparent: true,
-  opacity: 1,
-  shininess: 0,
-});
-const overlayMesh = new THREE.Mesh(overlayGeometry, overlayMaterial);
-globeGroup.add(overlayMesh);
-
-const atmosphereGeometry = new THREE.SphereGeometry(GLOBE_RADIUS + 4, 64, 64);
-const atmosphereMaterial = new THREE.MeshBasicMaterial({
-  color: ATMOSPHERE_COLOR,
-  transparent: true,
-  opacity: 0.2,
-  side: THREE.BackSide,
-});
-globeGroup.add(new THREE.Mesh(atmosphereGeometry, atmosphereMaterial));
-
-// Optional real landmass outlines — falls back to grid-only if the file
-// isn't present yet (a later "piece by piece" step can drop this file in).
-fetch("/data/world_regions.json")
-  .then((res) => (res.ok ? res.json() : Promise.reject(new Error("no local world data yet"))))
-  .then((landData) => {
-    biomeFeatures = landData;
-    const updatedTexture = generateGlobeTexture(landData);
-    overlayMaterial.map.dispose();
-    overlayMaterial.map = updatedTexture;
-    overlayMaterial.needsUpdate = true;
-  })
-  .catch(() => {
-    /* grid-only globe is the expected default for now */
-  });
+globeGroup.add(
+  new THREE.Mesh(
+    new THREE.SphereGeometry(GLOBE_RADIUS + 0.15, 64, 64),
+    new THREE.MeshBasicMaterial({ map: buildGraticuleTexture(), transparent: true, depthWrite: false })
+  )
+);
+globeGroup.add(
+  new THREE.Mesh(
+    new THREE.SphereGeometry(GLOBE_RADIUS * 1.06, 48, 48),
+    new THREE.MeshBasicMaterial({ color: SKELETON.haloColor, transparent: true, opacity: 0.35, side: THREE.BackSide })
+  )
+);
 
 const markerGeometry = new THREE.SphereGeometry(1.6, 16, 16);
 const ringGeometry = new THREE.RingGeometry(2.2, 2.9, 32);
@@ -323,8 +204,8 @@ function stepZoom() {
   }
 }
 
-// Fly-to animations (focusOnPoint / smoothResetView) bump this token; a newer
-// tween or a manual zoom cancels the running one instead of fighting it.
+// Camera flights (flyCameraTo) bump this token; a newer flight or a manual
+// zoom cancels the running one instead of fighting it.
 let cameraTween = 0;
 function cancelCameraTween() {
   cameraTween++;
@@ -361,13 +242,6 @@ function onPointerDown(e) {
   }
 }
 
-function updateOverlayTexture() {
-  const newTex = generateGlobeTexture(biomeFeatures, hoveredBiomeUid, selectedBiomeUid);
-  overlayMaterial.map.dispose();
-  overlayMaterial.map = newTex;
-  overlayMaterial.needsUpdate = true;
-}
-
 function onPointerMove(e) {
   if (activePointers.has(e.pointerId)) {
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -393,34 +267,14 @@ function onPointerMove(e) {
 
   if (e.pointerType === "touch") return; // hover tooltips are mouse-only
 
-  const markerHit = raycastMarkers(e);
-  const biomeHit = raycastBiomes(e);
-
-  if (markerHit) {
-    tooltipEl.textContent = markerHit.userData.marker.label;
+  const pin = pinUnderPointer(e);
+  tooltipEl.hidden = !pin;
+  if (pin) {
+    tooltipEl.textContent = pin.userData.marker.label;
     tooltipEl.style.left = `${e.clientX + 14}px`;
     tooltipEl.style.top = `${e.clientY + 14}px`;
-    tooltipEl.hidden = false;
-    document.body.style.cursor = "pointer";
-  } else if (biomeHit) {
-    const name = biomeHit.properties.name;
-    if (hoveredBiomeUid !== name) {
-      hoveredBiomeUid = name;
-      updateOverlayTexture();
-    }
-    tooltipEl.textContent = name;
-    tooltipEl.style.left = `${e.clientX + 14}px`;
-    tooltipEl.style.top = `${e.clientY + 14}px`;
-    tooltipEl.hidden = false;
-    document.body.style.cursor = "pointer";
-  } else {
-    tooltipEl.hidden = true;
-    document.body.style.cursor = isDragging ? "grabbing" : "grab";
-    if (hoveredBiomeUid !== null) {
-      hoveredBiomeUid = null;
-      updateOverlayTexture();
-    }
   }
+  document.body.style.cursor = pin ? "pointer" : "grab";
 }
 
 function onPointerUp(e) {
@@ -447,183 +301,61 @@ function onWheel(e) {
   setZoomTarget(currentZoom() * Math.exp(e.deltaY * sensitivity));
 }
 
-function raycastMarkers(e) {
+// The city pin (if any) under a pointer event, found by casting a ray from the
+// camera through that point on screen.
+const raycaster = new THREE.Raycaster();
+function pinUnderPointer(e) {
   const rect = container.getBoundingClientRect();
-  const mouse = new THREE.Vector2(
+  const ndc = new THREE.Vector2(
     ((e.clientX - rect.left) / rect.width) * 2 - 1,
-    -((e.clientY - rect.top) / rect.height) * 2 + 1
+    1 - ((e.clientY - rect.top) / rect.height) * 2
   );
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
-  const hit = raycaster.intersectObjects(globeGroup.children).find((i) => i.object.userData?.marker);
-  return hit?.object;
-}
-
-function raycastBiomes(e) {
-  if (!biomeFeatures?.features) return null;
-  const rect = container.getBoundingClientRect();
-  const mouse = new THREE.Vector2(
-    ((e.clientX - rect.left) / rect.width) * 2 - 1,
-    -((e.clientY - rect.top) / rect.height) * 2 + 1
-  );
-  const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObject(overlayMesh);
-  if (intersects.length > 0) {
-    const uv = intersects[0].uv;
-    // Convert UV to Lat/Lng
-    const lng = uv.x * 360 - 180;
-    const lat = uv.y * 180 - 90;
-
-    // Check which feature contains this point
-    return biomeFeatures.features.find((f) => {
-      const type = (f.properties?.type || f.properties?.biome || "").toLowerCase();
-      if (!type.includes("desert") && !type.includes("forest") && !type.includes("marine") && !type.includes("grassland") && !type.includes("wetland")) return false;
-      return isPointInPolygon([lng, lat], f.geometry);
-    });
+  raycaster.setFromCamera(ndc, camera);
+  for (const hit of raycaster.intersectObjects(globeGroup.children)) {
+    if (hit.object.userData.marker) return hit.object;
   }
   return null;
 }
 
-function isPointInPolygon(point, geometry) {
-  const [lng, lat] = point;
-  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-
-  for (const polygon of polygons) {
-    const ring = polygon[0];
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i][0], yi = ring[i][1];
-      const xj = ring[j][0], yj = ring[j][1];
-      const intersect = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
-      if (intersect) inside = !inside;
-    }
-    if (inside) return true;
-  }
-  return false;
-}
-
 function onClick(e) {
   if (suppressClick) {
-    suppressClick = false;
+    suppressClick = false; // the pointer was dragging or pinching, not tapping
     return;
   }
-
-  const markerHit = raycastMarkers(e);
-  if (markerHit) {
-    showRegionPopup(markerHit.userData.marker);
-    return;
-  }
-
-  const biomeHit = raycastBiomes(e);
-  if (biomeHit) {
-    const name = biomeHit.properties.name;
-    selectedBiomeUid = name;
-    updateOverlayTexture();
-    showBiomePopup(biomeHit);
-  } else {
-    selectedBiomeUid = null;
-    updateOverlayTexture();
-  }
+  const pin = pinUnderPointer(e);
+  if (pin) showRegionPopup(pin.userData.marker);
 }
 
-function focusOnPoint(lat, lng, targetZ = Math.max(150, minDistance())) {
-  // latLngToVector3 gives a position in the globe's own unrotated local
-  // space. The globe can already be rotated from a manual drag, so that
-  // local position has to be converted to its actual current world
-  // position (via the globe's rotation) — otherwise the camera flies to
-  // where the marker WOULD be at zero rotation, causing a visible jump.
-  const localPos = latLngToVector3(lat, lng, GLOBE_RADIUS, targetZ - GLOBE_RADIUS);
-  const pos = localPos.clone().applyQuaternion(globeGroup.quaternion);
+// --- Camera flights: one eased animation used for flying to a city and back
+// out to the whole globe. Starting a new flight (or zooming by hand)
+// supersedes the one in progress via the cameraTween token. ---
+const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 
-  const startPos = camera.position.clone();
-  const duration = 1200;
-  const startTime = performance.now();
+function flyCameraTo(destination, durationMs) {
   zoomTarget = null;
-  const tween = ++cameraTween;
+  const flight = ++cameraTween;
+  const from = camera.position.clone();
+  const startedAt = performance.now();
 
-  function updateCamera(now) {
-    if (tween !== cameraTween) return; // interrupted by a newer tween or a zoom
-    const elapsed = now - startTime;
-    const t = Math.min(elapsed / duration, 1);
-    const easeT = 1 - Math.pow(1 - t, 3);
-    
-    camera.position.lerpVectors(startPos, pos, easeT);
+  const frame = (now) => {
+    if (flight !== cameraTween) return;
+    const progress = Math.min((now - startedAt) / durationMs, 1);
+    camera.position.copy(from).lerp(destination, easeOutCubic(progress));
     camera.lookAt(0, 0, 0);
-
-    if (t < 1) {
-      requestAnimationFrame(updateCamera);
-    }
-  }
-  requestAnimationFrame(updateCamera);
+    if (progress < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 
-function smoothResetView() {
-  const startPos = camera.position.clone();
-  const targetPos = new THREE.Vector3(0, 0, homeZ);
-  const duration = 800;
-  const startTime = performance.now();
-  zoomTarget = null;
-  const tween = ++cameraTween;
-
-  function updateCamera(now) {
-    if (tween !== cameraTween) return; // interrupted by a newer tween or a zoom
-    const elapsed = now - startTime;
-    const t = Math.min(elapsed / duration, 1);
-    const easeT = 1 - Math.pow(1 - t, 3);
-    
-    camera.position.lerpVectors(startPos, targetPos, easeT);
-    camera.lookAt(0, 0, 0);
-
-    if (t < 1) {
-      requestAnimationFrame(updateCamera);
-    }
-  }
-  requestAnimationFrame(updateCamera);
+// Fly to look straight down at a lat/lng from `distance` away. The globe may
+// have been spun by hand, so the spot's position is taken in world space.
+function flyToLocation(lat, lng, distance = Math.max(150, minDistance())) {
+  const spot = latLngToVector3(lat, lng, distance).applyQuaternion(globeGroup.quaternion);
+  flyCameraTo(spot, 1200);
 }
 
-function getPolygonCentroid(geometry) {
-  let latSum = 0, lngSum = 0, count = 0;
-  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-  
-  polygons.forEach(polygon => {
-    polygon[0].forEach(coord => {
-      lngSum += coord[0];
-      latSum += coord[1];
-      count++;
-    });
-  });
-  
-  return { lat: latSum / count, lng: lngSum / count };
-}
-
-function showBiomePopup(feature) {
-  currentPopupFeature = feature;
-  const centroid = getPolygonCentroid(feature.geometry);
-  focusOnPoint(centroid.lat, centroid.lng);
-
-  const type = (feature.properties?.type || feature.properties?.biome || "").toLowerCase();
-  const biomeKey = type.includes("desert") ? "desert" : 
-                   type.includes("forest") ? "forest" : 
-                   type.includes("marine") ? "marine" : 
-                   type.includes("grassland") ? "savanna" : "wetland";
-  const info = BIOME_ADVICE[biomeKey];
-
-  popupEl.innerHTML = `
-    <button class="popup-close" aria-label="Close">×</button>
-    <h3>${feature.properties.name}</h3>
-    <p><strong>${info.title}</strong></p>
-    <p style="font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.4;">${info.advice}</p>
-    <button class="biome-fit-check-btn">📸 Fit Check</button>
-  `;
-  popupEl.hidden = false;
-  popupEl.querySelector(".popup-close").addEventListener("click", () => {
-    popupEl.hidden = true;
-    selectedBiomeUid = null;
-    updateOverlayTexture();
-    smoothResetView();
-  });
+function flyHome() {
+  flyCameraTo(new THREE.Vector3(0, 0, homeZ), 800);
 }
 
 function yearOptionsHtml(selectedYear) {
@@ -635,22 +367,21 @@ function yearOptionsHtml(selectedYear) {
 }
 
 let currentPopupMarker = null;
-let currentPopupFeature = null;
 function showRegionPopup(marker) {
   currentPopupMarker = marker;
-  focusOnPoint(marker.lat, marker.lng);
+  flyToLocation(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
     <h3>${marker.label} Style</h3>
     <select class="popup-year" aria-label="Year">${yearOptionsHtml(DEFAULT_YEAR)}</select>
     <div class="popup-images"><p class="muted">Loading…</p></div>
-    <button class="fit-check-btn">📸 Fit Check</button>
+    <button class="fit-check-btn">Fit Check</button>
   `;
   popupEl.hidden = false;
 
   popupEl.querySelector(".popup-close").addEventListener("click", () => {
     popupEl.hidden = true;
-    smoothResetView();
+    flyHome();
   });
 
   const yearSelect = popupEl.querySelector(".popup-year");
@@ -732,10 +463,6 @@ popupEl.addEventListener("click", (e) => {
     const year = popupEl.querySelector(".popup-year")?.value || DEFAULT_YEAR;
     openFitCheck(currentPopupMarker.label, year);
   }
-
-  if (e.target.closest(".biome-fit-check-btn") && currentPopupFeature) {
-    openRegionFitCheck(currentPopupFeature.properties.name);
-  }
 });
 
 lightboxEl.querySelector(".lightbox-close").addEventListener("click", closeLightbox);
@@ -790,7 +517,7 @@ function dataUrlToBlob(dataUrl) {
 }
 
 // Opens the full-screen camera. `context` says what the capture is scored
-// against: { city, year }, { region }, or { mode: "city-match" }.
+// against: { city, year } or { mode: "city-match" }.
 async function openCamera(title, context) {
   cancelCountdown();
   fitCheckContext = context;
@@ -835,10 +562,6 @@ function openFitCheck(city, year) {
   return openCamera(`Fit Check — ${city} ${year}`, { city, year });
 }
 
-function openRegionFitCheck(regionName) {
-  return openCamera(`Fit Check — ${regionName}`, { region: regionName });
-}
-
 function openCityMatch() {
   highlightCity(null);
   return openCamera("Which city matches your fit?", { mode: "city-match" });
@@ -868,7 +591,7 @@ try {
 }
 
 function captureLabel() {
-  return captureTimer ? `⏱ Capture in ${captureTimer}s` : "📸 Capture & Score";
+  return captureTimer ? `Capture in ${captureTimer}s` : "Capture & Score";
 }
 
 function renderTimerToggle() {
@@ -967,66 +690,41 @@ async function captureAndScore() {
     return;
   }
 
-  let url = "/api/outfit/fit-check";
-  const form = new FormData();
-  form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
-
-  if (fitCheckContext.region) {
-    fitCheckResultEl.innerHTML = `<p class="muted">Assessing your outfit for the ${fitCheckContext.region} region…</p>`;
-    form.append("context", `Assess this outfit for suitability in the ${fitCheckContext.region} region. Consider local climate and cultural context.`);
-    url = "/api/outfit/rate";
-  } else {
-    fitCheckResultEl.innerHTML = `<p class="muted">Comparing your fit to ${fitCheckContext.city}'s runway, streetwear, everyday and heritage style…</p>`;
-    form.append("city", fitCheckContext.city);
-    form.append("year", fitCheckContext.year);
-  }
-
+  const { city, year } = fitCheckContext;
+  fitCheckResultEl.innerHTML = `<p class="muted">Comparing your fit to ${city}'s runway, streetwear, everyday and heritage style…</p>`;
   fitCheckCaptureBtn.disabled = true;
 
   try {
-    const res = await fetch(url, { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Fit check failed");
+    const form = new FormData();
+    form.append("photo", dataUrlToBlob(photoDataUrl), "fit.jpg");
+    form.append("city", city);
+    form.append("year", year);
+    const res = await fetch("/api/outfit/fit-check", { method: "POST", body: form });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Fit check failed");
 
-    if (fitCheckContext.region) {
-       lastFitResult = {
-         photoDataUrl,
-         score: data.score,
-         max: 10,
-         headline: data.vibe,
-         subline: data.oneLiner,
-         context: fitCheckContext.region,
-         accent: scoreAccent(data.score * 10),
-       };
-       fitCheckResultEl.innerHTML = `
-        <h3>${data.score}/10 — ${data.vibe}</h3>
-        <p><em>${data.oneLiner}</em></p>
-        <p><strong>Working:</strong> ${(data.highlights || []).join(", ")}</p>
-        <p><strong>Try:</strong> ${(data.suggestions || []).join(", ")}</p>`;
-    } else {
-       lastFitResult = {
-         photoDataUrl,
-         score: data.fitScore,
-         max: 100,
-         headline: data.verdict,
-         subline: data.tip,
-         context: data.closestStyle ? `${fitCheckContext.city} ${data.closestStyle}` : fitCheckContext.city,
-         accent: scoreAccent(data.fitScore),
-       };
-       fitCheckResultEl.innerHTML = `
-         <div class="fit-score-badge" style="background: ${scoreGradient(data.fitScore)}">
-           <span class="fit-score-num">${data.fitScore}</span><span class="fit-score-max">/100</span>
-         </div>
-         <h4 class="fit-verdict" style="color: ${scoreAccent(data.fitScore)}">${data.verdict}</h4>
-         ${data.closestStyle ? `<p class="fit-closest">Closest to ${fitCheckContext.city} ${data.closestStyle.toLowerCase()}</p>` : ""}
-         <p class="fit-reasoning">${data.reasoning}</p>
-         <p class="fit-tip">💡 ${data.tip}</p>
-       `;
-    }
-    fitCheckResultEl.insertAdjacentHTML(
-      "beforeend",
-      `<button class="share-fit-btn">${canShareFiles() ? "📤 Share" : "⬇️ Save image"}</button>`
-    );
+    const { fitScore, verdict, reasoning, closestStyle } = result;
+    const accent = scoreAccent(fitScore);
+    lastFitResult = {
+      photoDataUrl,
+      score: fitScore,
+      max: 100,
+      headline: verdict,
+      subline: reasoning,
+      context: closestStyle ? `${city} ${closestStyle}` : city,
+      accent,
+    };
+
+    const closest = closestStyle ? `<p class="fit-closest">Closest to ${city} ${closestStyle.toLowerCase()}</p>` : "";
+    fitCheckResultEl.innerHTML = `
+      <div class="fit-score-badge" style="background: ${scoreGradient(fitScore)}">
+        <span class="fit-score-num">${fitScore}</span><span class="fit-score-max">/100</span>
+      </div>
+      <h4 class="fit-verdict" style="color: ${accent}">${verdict}</h4>
+      ${closest}
+      <p class="fit-reasoning">${reasoning}</p>
+      <button class="share-fit-btn">${canShareFiles() ? "Share" : "Save image"}</button>
+    `;
   } catch (err) {
     fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
   } finally {
@@ -1088,7 +786,7 @@ async function runCityMatch(photoDataUrl, videoEl) {
 function showCityMatch(data, photoDataUrl) {
   const [best, ...others] = data.matches;
   highlightCity(best.id);
-  focusOnPoint(best.lat, best.lng, homeZ * 0.75);
+  flyToLocation(best.lat, best.lng, homeZ * 0.75);
 
   lastFitResult = {
     photoDataUrl,
@@ -1102,6 +800,7 @@ function showCityMatch(data, photoDataUrl) {
   };
 
   cityMatchCard.innerHTML = `
+    <div class="match-body">
     <button class="popup-close" data-action="close" aria-label="Close">×</button>
     <p class="match-eyebrow">Your fit is</p>
     <h2 class="match-headline">
@@ -1110,6 +809,7 @@ function showCityMatch(data, photoDataUrl) {
     <p class="fit-closest">Closest to ${best.city} ${String(best.closestStyle).toLowerCase()}</p>
     <p class="match-verdict">${data.verdict}</p>
     <p class="fit-reasoning">${best.reasoning}</p>
+    <button class="match-explore" data-action="explore" data-city="${best.id}">Explore ${best.city} →</button>
     ${
       others.length
         ? `<p class="match-runners-title">Also close</p>
@@ -1126,17 +826,13 @@ function showCityMatch(data, photoDataUrl) {
            </ul>`
         : ""
     }
-    <p class="fit-tip">💡 ${data.tip}</p>
+    </div>
     <div class="match-actions">
-      <button class="share-fit-btn" data-action="share">${canShareFiles() ? "📤 Share" : "⬇️ Save image"}</button>
-      <div class="match-actions-row">
-        <button data-action="explore" data-city="${best.id}">Explore ${best.city}</button>
-        <button data-action="retry">Try again</button>
-      </div>
+      <button class="share-fit-btn" data-action="share">${canShareFiles() ? "Share" : "Save image"}</button>
+      <button class="retry-btn" data-action="retry">Try again</button>
     </div>
   `;
   cityMatchCard.hidden = false;
-  cityMatchCard.scrollTop = 0;
 }
 
 function closeCityMatch() {
@@ -1160,7 +856,7 @@ cityMatchCard.addEventListener("click", (e) => {
     openCityMatch();
   } else if (action === "close") {
     closeCityMatch();
-    smoothResetView();
+    flyHome();
   }
 });
 
@@ -1274,7 +970,7 @@ async function buildShareCard(result) {
 
   ctx.fillStyle = "#a8452b";
   ctx.font = "700 34px system-ui, -apple-system, sans-serif";
-  ctx.fillText("📸 thefitd.com", PAD, H - PAD);
+  ctx.fillText("thefitd.com", PAD, H - PAD);
 
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
 }
@@ -1368,5 +1064,5 @@ document.getElementById("zoomIn")?.addEventListener("click", () => setZoomTarget
 document.getElementById("zoomOut")?.addEventListener("click", () => setZoomTarget(currentZoom() * 1.25));
 document.getElementById("resetView")?.addEventListener("click", () => {
   globeGroup.rotation.set(0, 0, 0);
-  smoothResetView();
+  flyHome();
 });

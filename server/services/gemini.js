@@ -113,8 +113,7 @@ like the runway. Return ONLY a JSON object (no prose, no markdown fences):
   "fitScore": 1-100,
   "closestStyle": "the one style it's closest to, exactly one of: ${labels.join(" | ")}",
   "verdict": "a short punchy one-line verdict, e.g. 'Straight off a ${city} sidewalk' or 'Not quite ${city} yet'",
-  "reasoning": "2-3 sentences comparing the outfit to the reference looks, naming the styles it draws from",
-  "tip": "one concrete suggestion to fit in better"
+  "reasoning": "2-3 sentences comparing the outfit to the reference looks, naming the styles it draws from"
 }
 
 The outfit to judge:`;
@@ -196,8 +195,7 @@ Return ONLY a JSON object (no prose, no markdown fences):
       "reasoning": "1-2 sentences on what in the outfit matches this city"
     }
   ],
-  "verdict": "a short punchy one-liner about the best match, e.g. 'Straight off a Shibuya crossing'",
-  "tip": "one concrete suggestion to lean further into the best-matching city's style"
+  "verdict": "a short punchy one-liner about the best match, e.g. 'Straight off a Shibuya crossing'"
 }
 Include every city exactly once, best match first.
 

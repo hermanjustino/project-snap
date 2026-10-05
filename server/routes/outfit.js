@@ -141,7 +141,7 @@ router.post("/city-match", upload.single("photo"), async (req, res) => {
       return res.status(502).json({ error: "Couldn't score the cities — try again." });
     }
 
-    res.json({ matches, verdict: result.verdict, tip: result.tip });
+    res.json({ matches, verdict: result.verdict });
   } catch (err) {
     console.error("[outfit] city-match failed:", err);
     res.status(500).json({ error: "Failed to match your fit to a city", detail: String(err.message || err) });
