@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>fitd stats</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #ece1c8;
+      --panel: #f8f2e2;
+      --ink: #4a4130;
+      --ink-2: #6b5842;
+      --muted: #8c7f63;
+      --line: #e3d6b6;
+      --border: #d9c9a3;
+      --mark: #a8452b;
+      --track: #ece1c8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.75rem; margin-bottom: 1.25rem; }
+    h1 { margin: 0; font-size: 1.3rem; }
+    h1 span { color: var(--muted); font-weight: 400; }
+    h2 { margin: 0 0 0.25rem; font-size: 0.95rem; }
+    .sub { margin: 0 0 1rem; font-size: 0.8rem; color: var(--muted); }
+
+    .range { display: inline-flex; gap: 0.2rem; padding: 0.2rem; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); }
+    .range button { border: none; background: none; color: var(--muted); font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
+    .range button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.1rem; }
+    .tile .label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .tile .value { font-size: 2rem; font-weight: 800; line-height: 1.15; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+    .tile .note { font-size: 0.75rem; color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .grid-2 .card { margin-bottom: 0; }
+
+    /* Daily column chart */
+    .chart { position: relative; display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; height: 220px; }
+    .y-axis { position: relative; width: 2.2rem; font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .y-axis span { position: absolute; right: 0; transform: translateY(50%); }
+    .plot { position: relative; border-bottom: 1px solid var(--muted); }
+    .gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+    .columns { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+    .col { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: default; }
+    .col .bar { width: min(24px, 70%); background: var(--mark); border-radius: 4px 4px 0 0; min-height: 0; }
+    .col:hover .bar, .col:focus-visible .bar { filter: brightness(0.85); }
+    .col:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+    .x-axis { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin: 0.35rem 0 0 2.7rem; }
+    .tooltip { position: fixed; z-index: 10; pointer-events: none; background: var(--ink); color: var(--panel); font-size: 0.78rem; line-height: 1.45; padding: 0.45rem 0.65rem; border-radius: 8px; white-space: nowrap; box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+    .tooltip strong { display: block; }
+
+    /* Horizontal bar lists (funnel and rankings) */
+    /* Name and value on one line, the bar full-width underneath. */
+    .bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+    .bars li { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name num" "bar bar"; gap: 0.3rem 0.6rem; font-size: 0.85rem; }
+    .bars .name { grid-area: name; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bars .num { grid-area: num; font-variant-numeric: tabular-nums; color: var(--ink-2); text-align: right; }
+    .bars .track { grid-area: bar; display: block; height: 8px; background: var(--track); border-radius: 0 4px 4px 0; }
+    .bars .fill { display: block; height: 100%; background: var(--mark); border-radius: 0 4px 4px 0; }
+    .bars .num small { color: var(--muted); }
+    .empty { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: 0.4rem 0.5rem; text-align: right; border-bottom: 1px solid var(--line); }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    details summary { cursor: pointer; font-weight: 700; font-size: 0.95rem; }
+    details table { margin-top: 0.75rem; }
+
+    #login { max-width: 360px; margin: 15vh auto 0; }
+    #login form { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+    #login input { flex: 1; padding: 0.6rem 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+    #login button { padding: 0.6rem 1rem; border: none; border-radius: 10px; background: var(--mark); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    #loginError { color: var(--mark); font-size: 0.85rem; margin: 0.6rem 0 0; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="login" class="card" hidden>
+      <h1>fitd <span>stats</span></h1>
+      <form id="loginForm">
+        <input id="keyInput" type="password" placeholder="Stats key" autocomplete="current-password" aria-label="Stats key" required />
+        <button type="submit">Open</button>
+      </form>
+      <p id="loginError" hidden></p>
+    </div>
+
+    <div id="dashboard" hidden>
+      <header>
+        <h1>fitd <span>stats</span></h1>
+        <div class="range" role="group" aria-label="Date range">
+          <button data-days="7">7 days</button>
+          <button data-days="30">30 days</button>
+          <button data-days="90">90 days</button>
+        </div>
+      </header>
+
+      <div class="tiles" id="tiles"></div>
+
+      <section class="card">
+        <h2>Visitors per day</h2>
+        <p class="sub">Each person counts once per day. Hover a day for details.</p>
+        <div class="chart">
+          <div class="y-axis" id="yAxis"></div>
+          <div class="plot" id="plot"></div>
+        </div>
+        <div class="x-axis" id="xAxis"></div>
+      </section>
+
+      <div class="grid-2" style="margin-bottom: 1rem">
+        <section class="card">
+          <h2>Fit Check funnel</h2>
+          <p class="sub">Share of people who opened the camera that reached each step.</p>
+          <ul class="bars" id="funnel"></ul>
+        </section>
+        <section class="card">
+          <h2>Cities people matched</h2>
+          <p class="sub">Best match from the Fit Check button.</p>
+          <ul class="bars" id="cityMatches"></ul>
+        </section>
+        <section class="card">
+          <h2>Cities opened</h2>
+          <p class="sub">City pins tapped on the globe.</p>
+          <ul class="bars" id="cityOpens"></ul>
+        </section>
+        <section class="card">
+          <h2>Where visitors came from</h2>
+          <p class="sub">Page views by referring site.</p>
+          <ul class="bars" id="referrers"></ul>
+        </section>
+        <section class="card">
+          <h2>Devices</h2>
+          <p class="sub">Page views by device type.</p>
+          <ul class="bars" id="devices"></ul>
+        </section>
+        <section class="card">
+          <h2>Camera timer</h2>
+          <p class="sub">Photos taken with each timer setting.</p>
+          <ul class="bars" id="timers"></ul>
+        </section>
+      </div>
+
+      <section class="card">
+        <details>
+          <summary>Daily numbers</summary>
+          <table>
+            <thead><tr><th>Day</th><th>Visitors</th><th>Page views</th><th>Fit Checks</th><th>Results</th><th>Shares</th></tr></thead>
+            <tbody id="dailyTable"></tbody>
+          </table>
+        </details>
+      </section>
+    </div>
+  </main>
+  <div class="tooltip" id="tooltip" hidden></div>
+
+  <script type="module">
+    const KEY_STORAGE = "fitd.statsKey";
+    const RANGE_STORAGE = "fitd.statsRange";
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+    const storage = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch { /* not remembered */ } },
+      remove(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } },
+    };
+
+    let key = storage.get(KEY_STORAGE);
+    let rangeDays = Number(storage.get(RANGE_STORAGE)) || 30;
+    const cityNames = await fetch("/data/cities.json")
+      .then((r) => r.json())
+      .then((cities) => Object.fromEntries(cities.map((c) => [c.id, c.label])))
+      .catch(() => ({}));
+
+    function showLogin(message) {
+      $("dashboard").hidden = true;
+      $("login").hidden = false;
+      $("loginError").hidden = !message;
+      $("loginError").textContent = message || "";
+      $("keyInput").focus();
+    }
+
+    $("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      key = $("keyInput").value.trim();
+      load();
+    });
+
+    document.querySelectorAll(".range button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        rangeDays = Number(btn.dataset.days);
+        storage.set(RANGE_STORAGE, String(rangeDays));
+        load();
+      });
+    });
+
+    async function load() {
+      if (!key) return showLogin();
+      const res = await fetch(`/api/stats?days=${rangeDays}`, { headers: { Authorization: `Bearer ${key}` } });
+      if (res.status === 401) {
+        storage.remove(KEY_STORAGE);
+        key = null;
+        return showLogin("That key didn't work.");
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return showLogin(data.error || "Couldn't load stats.");
+      storage.set(KEY_STORAGE, key);
+      $("login").hidden = true;
+      $("dashboard").hidden = false;
+      render(data.days);
+    }
+
+    // Adds up a nested counter map (e.g. cityMatches) across days.
+    function sumMaps(days, field) {
+      const total = {};
+      for (const d of days) for (const [k, v] of Object.entries(d[field] || {})) total[k] = (total[k] || 0) + v;
+      return total;
+    }
+    const sum = (days, get) => days.reduce((n, d) => n + (get(d) || 0), 0);
+    const ev = (d, name) => d.events?.[name] || 0;
+
+    function render(days) {
+      document.querySelectorAll(".range button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.days) === rangeDays)));
+
+      const visitors = sum(days, (d) => d.visitors);
+      const pageviews = sum(days, (d) => d.pageviews);
+      const results = sum(days, (d) => ev(d, "city_match_result") + ev(d, "fit_check_result"));
+      const shares = sum(days, (d) => ev(d, "share_tapped"));
+      $("tiles").innerHTML = [
+        ["Visitors", visitors, "daily visitors, added up"],
+        ["Page views", pageviews, ""],
+        ["Fit Check results", results, ""],
+        ["Shares", shares, ""],
+      ]
+        .map(([label, value, note]) => `<div class="tile"><div class="label">${label}</div><div class="value">${fmt(value)}</div>${note ? `<div class="note">${note}</div>` : ""}</div>`)
+        .join("");
+
+      renderDailyChart(days);
+
+      const opened = sum(days, (d) => ev(d, "fit_check_opened"));
+      const steps = [
+        ["Opened camera", opened],
+        ["Took a photo", sum(days, (d) => ev(d, "photo_captured"))],
+        ["Got a result", results],
+        ["Shared", shares],
+      ];
+      renderBars("funnel", steps, opened, (n) => (opened ? `${fmt(n)} <small>${Math.round((n / opened) * 100)}%</small>` : fmt(n)));
+
+      const ranked = (map, label = (k) => k) =>
+        Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => [label(k), v]);
+      const city = (id) => cityNames[id] || id;
+      renderBars("cityMatches", ranked(sumMaps(days, "cityMatches"), city));
+      renderBars("cityOpens", ranked(sumMaps(days, "cityOpens"), city));
+      renderBars("referrers", ranked(sumMaps(days, "referrers"), (k) => (k === "direct" ? "Direct / unknown" : k)));
+      renderBars("devices", ranked(sumMaps(days, "devices"), (k) => k[0].toUpperCase() + k.slice(1)));
+      renderBars("timers", ranked(sumMaps(days, "timers"), (k) => (k === "0s" ? "No timer" : `${k.replace("s", "")}-second timer`)));
+
+      $("dailyTable").innerHTML = [...days]
+        .reverse()
+        .map((d) => `<tr><td>${d.day}</td><td>${fmt(d.visitors)}</td><td>${fmt(d.pageviews)}</td><td>${fmt(ev(d, "fit_check_opened"))}</td><td>${fmt(ev(d, "city_match_result") + ev(d, "fit_check_result"))}</td><td>${fmt(ev(d, "share_tapped"))}</td></tr>`)
+        .join("");
+    }
+
+    function renderBars(id, rows, max = Math.max(1, ...rows.map((r) => r[1])), valueHtml = fmt) {
+      const el = $(id);
+      if (!rows.length || rows.every((r) => !r[1])) {
+        el.innerHTML = `<p class="empty">Nothing yet.</p>`;
+        return;
+      }
+      el.innerHTML = rows
+        .map(([name, n]) => `<li><span class="name" title="${escapeHtml(name)}">${escapeHtml(name)}</span><span class="track"><span class="fill" style="width:${max ? (n / max) * 100 : 0}%"></span></span><span class="num">${valueHtml(n)}</span></li>`)
+        .join("");
+    }
+
+    // Rounds the axis top up to a clean number (1, 2, 5 x 10^n) with 4 ticks.
+    function niceMax(value) {
+      if (value <= 4) return 4;
+      const raw = value / 4;
+      const pow = 10 ** Math.floor(Math.log10(raw));
+      const step = [1, 2, 5, 10].map((m) => m * pow).find((s) => s >= raw);
+      return step * 4;
+    }
+
+    function renderDailyChart(days) {
+      const top = niceMax(Math.max(0, ...days.map((d) => d.visitors || 0)));
+      const ticks = [0, 1, 2, 3, 4].map((i) => (top / 4) * i);
+      $("yAxis").innerHTML = ticks.map((t) => `<span style="bottom:${(t / top) * 100}%">${fmt(t)}</span>`).join("");
+      $("plot").innerHTML =
+        ticks.slice(1).map((t) => `<div class="gridline" style="bottom:${(t / top) * 100}%"></div>`).join("") +
+        `<div class="columns">${days
+          .map(
+            (d, i) =>
+              `<div class="col" tabindex="0" data-i="${i}" aria-label="${d.day}: ${fmt(d.visitors)} visitors"><div class="bar" style="height:${((d.visitors || 0) / top) * 100}%"></div></div>`
+          )
+          .join("")}</div>`;
+      const label = (day) => new Date(`${day}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      $("xAxis").innerHTML = `<span>${label(days[0].day)}</span><span>${label(days[days.length - 1].day)}</span>`;
+
+      const tooltip = $("tooltip");
+      const show = (col, x, y) => {
+        const d = days[col.dataset.i];
+        tooltip.innerHTML = `<strong>${label(d.day)}</strong>${fmt(d.visitors)} visitors<br>${fmt(d.pageviews)} page views<br>${fmt(ev(d, "fit_check_opened"))} Fit Checks opened`;
+        tooltip.hidden = false;
+        const w = tooltip.offsetWidth;
+        tooltip.style.left = `${Math.min(x + 12, window.innerWidth - w - 8)}px`;
+        tooltip.style.top = `${y - tooltip.offsetHeight - 10}px`;
+      };
+      $("plot").querySelectorAll(".col").forEach((col) => {
+        col.addEventListener("pointermove", (e) => show(col, e.clientX, e.clientY));
+        col.addEventListener("pointerleave", () => (tooltip.hidden = true));
+        col.addEventListener("focus", () => {
+          const r = col.getBoundingClientRect();
+          show(col, r.left + r.width / 2, r.top + r.height / 2);
+        });
+        col.addEventListener("blur", () => (tooltip.hidden = true));
+      });
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@
 // opens that city's style popup; the Fit Check button matches the visitor's
 // outfit to a city.
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import { track } from "./track.js";
 
 const GLOBE_RADIUS = 80;
 const MARKER_COLOR = "#a8452b";
@@ -440,6 +441,7 @@ function yearOptionsHtml(selectedYear) {
 let currentPopupMarker = null;
 function showRegionPopup(marker) {
   currentPopupMarker = marker;
+  track("city_opened", { city: marker.id });
   flyToLocation(marker.lat, marker.lng);
   popupEl.innerHTML = `
     <button class="popup-close" aria-label="Close">×</button>
@@ -630,10 +632,12 @@ async function openCamera(title, context) {
 }
 
 function openFitCheck(city, year) {
+  track("fit_check_opened", { mode: "city" });
   return openCamera(`Fit Check — ${city} ${year}`, { city, year });
 }
 
 function openCityMatch() {
+  track("fit_check_opened", { mode: "city-match" });
   highlightCity(null);
   return openCamera("Which city matches your fit?", { mode: "city-match" });
 }
@@ -746,6 +750,8 @@ async function captureAndScore() {
   const videoEl = fitCheckPublisherEl.querySelector("video");
   if (!videoEl?.videoWidth) return; // camera closed or stopped mid-countdown
   flashCamera();
+  const mode = fitCheckContext.mode === "city-match" ? "city-match" : "city";
+  track("photo_captured", { mode, timer: captureTimer });
 
   const canvas = document.createElement("canvas");
   canvas.width = videoEl.videoWidth || 640;
@@ -776,7 +782,9 @@ async function captureAndScore() {
 
     const { fitScore, verdict, reasoning, closestStyle } = result;
     const accent = scoreAccent(fitScore);
+    track("fit_check_result", { city: MARKERS.find((m) => m.label === city)?.id });
     lastFitResult = {
+      mode: "city",
       photoDataUrl,
       score: fitScore,
       max: 100,
@@ -856,10 +864,12 @@ async function runCityMatch(photoDataUrl, videoEl) {
 
 function showCityMatch(data, photoDataUrl) {
   const [best, ...others] = data.matches;
+  track("city_match_result", { city: best.id });
   highlightCity(best.id);
   flyToLocation(best.lat, best.lng, homeZ * 0.75);
 
   lastFitResult = {
+    mode: "city-match",
     photoDataUrl,
     scoreText: `${best.matchPercent}%`,
     badgeLabel: "match",
@@ -1048,6 +1058,7 @@ async function buildShareCard(result) {
 
 async function shareFitResult(button) {
   if (!lastFitResult) return;
+  track("share_tapped", { mode: lastFitResult.mode });
   const label = button.textContent;
   button.disabled = true;
   button.textContent = "Preparing…";
