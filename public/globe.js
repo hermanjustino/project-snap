@@ -3,24 +3,13 @@
 // outfit to a city.
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 import { track } from "./track.js";
+import { SKELETON, loadLand, paintSurface } from "./land.js";
+import { openShareSheet } from "./share-sheet.js";
+import { passportSummary, stampPassport } from "./passport.js";
+import { clearChallengeFromUrl, readChallenge } from "./challenge.js";
 
 const GLOBE_RADIUS = 80;
 const MARKER_COLOR = "#a8452b";
-
-// Skeleton globe: a solid sphere (the oceans) with latitude/longitude lines
-// and flat continent shapes.
-const SKELETON = {
-  sphereColor: 0xf1e6cc,
-  lineColor: "rgba(107, 88, 66, 0.45)",
-  equatorColor: "rgba(168, 69, 43, 0.55)",
-  landColor: "#d8c49b",
-  coastColor: "rgba(107, 88, 66, 0.7)",
-  haloColor: 0xf4ead2,
-};
-
-// Continent outlines: Natural Earth 1:110m land (public domain, via the
-// world-atlas package), stored as one GeoJSON MultiPolygon in [lng, lat].
-const LAND_URL = "/data/land.json";
 
 // Cities live in a shared file so the server's city-match Fit Check uses the
 // same list (and each city's style description).
@@ -41,86 +30,15 @@ function latLngToVector3(lat, lng, radius, alt = 0) {
   );
 }
 
-// Makes a ring's longitudes continuous: a step of more than 180° is the ring
-// crossing the 180° line, so the rest of the ring is shifted by 360° to carry
-// on past the map edge. A ring that ends up a full turn round (Antarctica,
-// which circles the pole) is closed along the pole instead of straight back.
-function unwrapRing(ring) {
-  let shift = 0;
-  let previous = null;
-  const out = ring.map(([lng, lat]) => {
-    if (previous !== null) {
-      const step = lng + shift - previous;
-      if (step > 180) shift -= 360;
-      else if (step < -180) shift += 360;
-    }
-    previous = lng + shift;
-    return [previous, lat];
-  });
-  if (shift !== 0) {
-    const pole = ring.reduce((sum, [, lat]) => sum + lat, 0) < 0 ? -90 : 90;
-    out.push([out[out.length - 1][0], pole], [out[0][0], pole]);
-  }
-  return out;
-}
-
-// Latitude/longitude lines every 15° and (once loaded) the continents,
-// painted onto a transparent canvas that wraps the sphere. The canvas is
-// equirectangular (x = longitude, y = latitude), the same mapping
-// latLngToVector3 uses for the pins, so the land lines up with the cities.
-// The equator is drawn heavier so the globe's orientation reads at a glance.
+// The skeleton globe's surface (grid lines + continents) painted onto a
+// transparent canvas that wraps the sphere. The canvas is equirectangular, the
+// same mapping latLngToVector3 uses for the pins, so the land lines up with
+// the cities.
 function buildSurfaceTexture(land = null) {
   const canvas = document.createElement("canvas");
   canvas.width = 2048;
   canvas.height = 1024;
-  const ctx = canvas.getContext("2d");
-  const step = 15;
-  const toX = (lng) => ((lng + 180) / 360) * canvas.width;
-  const toY = (lat) => ((90 - lat) / 180) * canvas.height;
-
-  const line = (x1, y1, x2, y2, color, width) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  };
-
-  for (let lng = -180; lng <= 180; lng += step) {
-    line(toX(lng), 0, toX(lng), canvas.height, SKELETON.lineColor, 1.5);
-  }
-  for (let lat = -90 + step; lat < 90; lat += step) {
-    const isEquator = lat === 0;
-    line(0, toY(lat), canvas.width, toY(lat), isEquator ? SKELETON.equatorColor : SKELETON.lineColor, isEquator ? 3 : 1.5);
-  }
-
-  // Land on top of the grid, so the lines only show across the oceans. Each
-  // polygon's rings go into one path and fill even-odd, leaving lakes open.
-  // Shapes that cross the 180° line (Fiji, eastern Russia, Antarctica) are
-  // unwrapped past the map edge and drawn again one map-width over, so the
-  // overhang appears on the other side instead of a stripe across the globe.
-  const rings = (land?.coordinates ?? []).map((polygon) => polygon.map(unwrapRing));
-  for (const shiftLng of [-360, 0, 360]) {
-    for (const polygon of rings) {
-      ctx.beginPath();
-      for (const ring of polygon) {
-        ring.forEach(([lng, lat], i) => {
-          const x = toX(lng + shiftLng);
-          if (i) ctx.lineTo(x, toY(lat));
-          else ctx.moveTo(x, toY(lat));
-        });
-        ctx.closePath();
-      }
-      ctx.fillStyle = SKELETON.landColor;
-      ctx.fill("evenodd");
-      ctx.strokeStyle = SKELETON.coastColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture = new THREE.CanvasTexture(paintSurface(canvas, land));
   texture.anisotropy = 4;
   return texture;
 }
@@ -177,8 +95,7 @@ const surfaceMaterial = new THREE.MeshBasicMaterial({
   transparent: true,
   depthWrite: false,
 });
-fetch(LAND_URL)
-  .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+loadLand()
   .then((land) => {
     surfaceMaterial.map.dispose();
     surfaceMaterial.map = buildSurfaceTexture(land);
@@ -564,7 +481,7 @@ const timerButtons = [...document.querySelectorAll(".timer-toggle button")];
 
 let fitCheckStream = null;
 let fitCheckContext = { city: null, year: null };
-let lastFitResult = null; // what the Share button turns into an image card
+let lastFitResult = null; // what the Share button shares (shape in share.js)
 
 // A vibrant, score-driven accent instead of one flat color for every result:
 // low scores read as a warm alert, high scores as a rich, celebratory glow.
@@ -591,16 +508,19 @@ function dataUrlToBlob(dataUrl) {
 
 // Without a requested size, browsers open the camera at a low default
 // (often 640x480), which looks blurry stretched across a phone screen. Ask for
-// up to 4K; the browser picks the closest mode the front camera supports.
-const CAMERA_CONSTRAINTS = {
+// up to 4K; the browser picks the closest mode the camera supports.
+// "user" is the front camera; "environment" the back one, for mirror fit
+// checks.
+let cameraFacing = "user";
+const cameraConstraints = () => ({
   audio: false,
   video: {
-    facingMode: "user",
+    facingMode: cameraFacing,
     width: { ideal: 3840 },
     height: { ideal: 2160 },
     frameRate: { ideal: 30 },
   },
-};
+});
 
 // Keep focus and exposure adjusting as people step back for a full-length
 // shot, on cameras that let the page control them (mostly Android Chrome;
@@ -629,9 +549,23 @@ async function openCamera(title, context) {
   popupEl.hidden = true; // step out of the way while the camera is up
   cityMatchCard.hidden = true;
 
+  await startCameraStream();
+}
+
+async function startCameraStream() {
+  fitCheckStream?.getTracks().forEach((track) => track.stop());
+  fitCheckStream = null;
+  fitCheckCaptureBtn.disabled = true;
+  fitCheckCaptureBtn.textContent = "Starting camera…";
+
   try {
-    fitCheckStream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
-    enableContinuousAutoAdjust(fitCheckStream);
+    const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints());
+    if (fitCheckPanel.hidden) {
+      stream.getTracks().forEach((track) => track.stop()); // closed while starting
+      return;
+    }
+    fitCheckStream = stream;
+    enableContinuousAutoAdjust(stream);
 
     const videoEl = document.createElement("video");
     videoEl.autoplay = true;
@@ -640,9 +574,17 @@ async function openCamera(title, context) {
     videoEl.style.width = "100%";
     videoEl.style.height = "100%";
     videoEl.style.objectFit = "cover";
-    videoEl.srcObject = fitCheckStream;
+    videoEl.srcObject = stream;
     fitCheckPublisherEl.innerHTML = "";
+    fitCheckPublisherEl.classList.toggle("mirrored", cameraFacing === "user");
     fitCheckPublisherEl.appendChild(videoEl);
+
+    // Only offer the switch on devices with more than one camera (labels and
+    // the full list are only available once access is granted).
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devices) => (flipBtn.hidden = devices.filter((d) => d.kind === "videoinput").length < 2))
+      .catch(() => {});
 
     // Only allow a capture once the camera is showing a picture; tapping
     // earlier would score a black frame.
@@ -657,6 +599,14 @@ async function openCamera(title, context) {
     fitCheckResultEl.innerHTML = `<p class="muted">Couldn't access your camera: ${err.message}</p>`;
   }
 }
+
+const flipBtn = document.getElementById("fitCheckFlip");
+flipBtn.addEventListener("click", () => {
+  if (countdownInterval !== null) return;
+  cameraFacing = cameraFacing === "user" ? "environment" : "user";
+  fitCheckResultEl.hidden = true;
+  startCameraStream();
+});
 
 function openFitCheck(city, year) {
   track("fit_check_opened", { mode: "city" });
@@ -823,15 +773,21 @@ async function captureAndScore() {
     const { fitScore, verdict, reasoning, closestStyle } = result;
     const accent = scoreAccent(fitScore);
     track("fit_check_result", { city: MARKERS.find((m) => m.label === city)?.id });
+    const marker = MARKERS.find((m) => m.label === city);
     lastFitResult = {
       mode: "city",
       photoDataUrl,
-      score: fitScore,
-      max: 100,
-      headline: verdict,
-      subline: reasoning,
-      context: closestStyle ? `${city} ${closestStyle}` : city,
+      pct: fitScore,
       accent,
+      city,
+      cityId: marker?.id,
+      lat: marker?.lat ?? 0,
+      lng: marker?.lng ?? 0,
+      style: closestStyle,
+      verdict,
+      items: [],
+      challenge: null,
+      stamp: null,
     };
 
     const closest = closestStyle ? `<p class="fit-closest">Closest to ${city} ${closestStyle.toLowerCase()}</p>` : "";
@@ -842,7 +798,7 @@ async function captureAndScore() {
       <h4 class="fit-verdict" style="color: ${accent}">${verdict}</h4>
       ${closest}
       <p class="fit-reasoning">${reasoning}</p>
-      <button class="share-fit-btn">${canShareFiles() ? "Share" : "Save image"}</button>
+      <button class="share-fit-btn">Share</button>
     `;
   } catch (err) {
     fitCheckResultEl.innerHTML = `<p class="muted">Error: ${err.message}</p>`;
@@ -902,22 +858,77 @@ async function runCityMatch(photoDataUrl, videoEl) {
   }
 }
 
+const escapeHtml = (text) =>
+  String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// A friend's challenge from a shared link (?c=yyz.88&n=Herman), if any. It
+// stays active for the visit, so every result is shown next to theirs.
+let activeChallenge = readChallenge(MARKERS);
+let challengeCompleted = false;
+
+function vsTilesHtml(mine) {
+  const c = activeChallenge;
+  const theirs = `<div class="vs-tile">
+      <span class="vs-who">${escapeHtml(c.name || "Your friend")}</span>
+      <span class="vs-pct" style="color: ${scoreAccent(c.pct)}">${c.pct}%</span>
+      <span class="vs-city">${escapeHtml(c.city)}</span>
+    </div>`;
+  const yours = mine
+    ? `<div class="vs-tile vs-mine" style="background-image: linear-gradient(rgba(43,36,26,0.15), rgba(43,36,26,0.7)), url('${mine.photoDataUrl}')">
+        <span class="vs-who">You</span>
+        <span class="vs-pct" style="color: #fff">${mine.pct}%</span>
+        <span class="vs-city">${escapeHtml(mine.city)}</span>
+      </div>`
+    : `<div class="vs-tile vs-empty">you?</div>`;
+  return `<div class="vs-tiles">${theirs}${yours}</div>`;
+}
+
+function showChallenge() {
+  const c = activeChallenge;
+  const who = c.name ? `${escapeHtml(c.name)}'s` : "A friend's";
+  track("challenge_opened", { city: c.cityId });
+  highlightCity(c.cityId);
+  flyToLocation(c.lat, c.lng, homeZ * 0.75);
+  cityMatchCard.innerHTML = `
+    <div class="match-body">
+      <button class="popup-close" data-action="close" aria-label="Close">×</button>
+      <p class="match-eyebrow">${c.name ? `${escapeHtml(c.name)} challenged you` : "You've been challenged"}</p>
+      <h2 class="challenge-headline">${who} fit is ${c.pct}% ${escapeHtml(c.city)}. What's yours?</h2>
+      ${vsTilesHtml(null)}
+    </div>
+    <div class="match-actions match-actions-stack">
+      <button class="share-fit-btn" data-action="retry">Check my fit</button>
+      <p class="match-note">No sign-up. Your photo is only used for the match.</p>
+    </div>
+  `;
+  cityMatchCard.hidden = false;
+}
+
 function showCityMatch(data, photoDataUrl) {
   const [best, ...others] = data.matches;
   track("city_match_result", { city: best.id });
+  if (activeChallenge && !challengeCompleted) {
+    challengeCompleted = true;
+    track("challenge_completed", { city: activeChallenge.cityId });
+  }
   highlightCity(best.id);
   flyToLocation(best.lat, best.lng, homeZ * 0.75);
+  stampPassport(best.id, best.matchPercent);
 
   lastFitResult = {
     mode: "city-match",
     photoDataUrl,
-    scoreText: `${best.matchPercent}%`,
-    badgeLabel: "match",
-    headline: `My fit is ${best.matchPercent}% ${best.city}`,
-    subline: data.verdict,
-    context: `${best.city} ${best.closestStyle}`,
+    pct: best.matchPercent,
     accent: scoreAccent(best.matchPercent),
-    shareText: `My fit is ${best.matchPercent}% ${best.city}. Which city is yours? ${SHARE_URL}`,
+    city: best.city,
+    cityId: best.id,
+    lat: best.lat,
+    lng: best.lng,
+    style: best.closestStyle,
+    verdict: data.verdict,
+    items: data.items ?? [],
+    challenge: activeChallenge && { name: activeChallenge.name, pct: activeChallenge.pct, city: activeChallenge.city },
+    stamp: { count: passportSummary().cities.get(best.id)?.count ?? 1 },
   };
 
   cityMatchCard.innerHTML = `
@@ -927,6 +938,7 @@ function showCityMatch(data, photoDataUrl) {
     <h2 class="match-headline">
       <span class="match-pct" style="color: ${scoreAccent(best.matchPercent)}">${best.matchPercent}%</span> ${best.city}
     </h2>
+    ${activeChallenge ? vsTilesHtml(lastFitResult) : ""}
     <p class="fit-closest">Closest to ${best.city} ${String(best.closestStyle).toLowerCase()}</p>
     <p class="match-verdict">${data.verdict}</p>
     <p class="fit-reasoning">${best.reasoning}</p>
@@ -949,7 +961,7 @@ function showCityMatch(data, photoDataUrl) {
     }
     </div>
     <div class="match-actions">
-      <button class="share-fit-btn" data-action="share">${canShareFiles() ? "Share" : "Save image"}</button>
+      <button class="share-fit-btn" data-action="share">${activeChallenge ? "Share back" : "Share"}</button>
       <button class="retry-btn" data-action="retry">Try again</button>
     </div>
   `;
@@ -967,7 +979,7 @@ cityMatchCard.addEventListener("click", (e) => {
   const { action, city } = btn.dataset;
 
   if (action === "share") {
-    shareFitResult(btn);
+    if (lastFitResult) openShareSheet(lastFitResult);
   } else if (action === "explore") {
     const marker = MARKERS.find((m) => m.id === city);
     closeCityMatch();
@@ -983,159 +995,15 @@ cityMatchCard.addEventListener("click", (e) => {
 
 document.getElementById("cityMatchBtn").addEventListener("click", openCityMatch);
 
-// --- Sharing a fit check: the result is rendered onto a portrait image card
-// (photo + score + verdict + link) so it reads on its own when posted to a
-// story or a group chat. ---
-const SHARE_URL = "https://thefitd.com";
-
-function canShareFiles() {
-  try {
-    const probe = new File([""], "probe.jpg", { type: "image/jpeg" });
-    return !!navigator.canShare?.({ files: [probe] });
-  } catch {
-    return false;
-  }
+if (activeChallenge) {
+  clearChallengeFromUrl();
+  showChallenge();
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-function wrapLines(ctx, text, maxWidth) {
-  const lines = [];
-  let line = "";
-  for (const word of String(text || "").split(/\s+/)) {
-    const next = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(next).width > maxWidth) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-async function buildShareCard(result) {
-  const W = 1080;
-  const H = 1350;
-  const PAD = 60;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = "#ece1c8";
-  ctx.fillRect(0, 0, W, H);
-
-  // Photo, cropped to fill a rounded frame.
-  const photo = await loadImage(result.photoDataUrl);
-  const frame = { x: PAD, y: PAD, w: W - PAD * 2, h: 760 };
-  const scale = Math.max(frame.w / photo.width, frame.h / photo.height);
-  const sw = frame.w / scale;
-  const sh = frame.h / scale;
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(frame.x, frame.y, frame.w, frame.h, 36);
-  ctx.clip();
-  ctx.drawImage(photo, (photo.width - sw) / 2, (photo.height - sh) / 2, sw, sh, frame.x, frame.y, frame.w, frame.h);
-  ctx.restore();
-
-  // Score badge overlapping the photo's bottom-right corner.
-  const cx = W - PAD - 110;
-  const cy = frame.y + frame.h - 20;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 110, 0, Math.PI * 2);
-  ctx.fillStyle = result.accent;
-  ctx.fill();
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = "#ece1c8";
-  ctx.stroke();
-  ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const scoreText = result.scoreText ?? String(result.score);
-  ctx.font = `800 ${scoreText.length > 3 ? 66 : 84}px system-ui, -apple-system, sans-serif`; // "100%" needs to fit
-  ctx.fillText(scoreText, cx, cy - 10);
-  ctx.font = "600 30px system-ui, -apple-system, sans-serif";
-  ctx.fillText(result.badgeLabel ?? `/ ${result.max}`, cx, cy + 52);
-
-  // Text block.
-  ctx.textAlign = "left";
-  ctx.textBaseline = "alphabetic";
-  let y = frame.y + frame.h + 120; // clears the score badge
-  ctx.fillStyle = "#8c7f63";
-  ctx.font = "600 32px system-ui, -apple-system, sans-serif";
-  ctx.fillText(`FIT CHECK · ${result.context}`.toUpperCase(), PAD, y);
-
-  y += 72;
-  ctx.fillStyle = "#4a4130";
-  ctx.font = "800 60px system-ui, -apple-system, sans-serif";
-  for (const line of wrapLines(ctx, result.headline, W - PAD * 2).slice(0, 2)) {
-    ctx.fillText(line, PAD, y);
-    y += 70;
-  }
-
-  ctx.fillStyle = "#6b5842";
-  ctx.font = "400 34px system-ui, -apple-system, sans-serif";
-  for (const line of wrapLines(ctx, result.subline, W - PAD * 2).slice(0, 3)) {
-    ctx.fillText(line, PAD, y);
-    y += 46;
-  }
-
-  ctx.fillStyle = "#a8452b";
-  ctx.font = "700 34px system-ui, -apple-system, sans-serif";
-  ctx.fillText("thefitd.com", PAD, H - PAD);
-
-  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-}
-
-async function shareFitResult(button) {
-  if (!lastFitResult) return;
-  track("share_tapped", { mode: lastFitResult.mode });
-  const label = button.textContent;
-  button.disabled = true;
-  button.textContent = "Preparing…";
-
-  try {
-    const blob = await buildShareCard(lastFitResult);
-    const file = new File([blob], "fitd-fit-check.jpg", { type: "image/jpeg" });
-    const text =
-      lastFitResult.shareText ??
-      `${lastFitResult.score}/${lastFitResult.max} — ${lastFitResult.headline}. Check your fit at ${SHARE_URL}`;
-
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: "My fitd Fit Check", text });
-      } catch (err) {
-        if (err.name !== "AbortError") throw err; // user closing the sheet isn't an error
-      }
-      return;
-    }
-
-    // Desktop fallback: save the card so it can be posted anywhere.
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = file.name;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  } catch (err) {
-    alert(`Couldn't share: ${err.message}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = label;
-  }
-}
-
+// --- Sharing: the Share buttons open the share sheet (share-sheet.js) with
+// the current result. ---
 fitCheckResultEl.addEventListener("click", (e) => {
-  const btn = e.target.closest(".share-fit-btn");
-  if (btn) shareFitResult(btn);
+  if (e.target.closest(".share-fit-btn") && lastFitResult) openShareSheet(lastFitResult);
 });
 
 renderer.domElement.addEventListener("pointerdown", onPointerDown);

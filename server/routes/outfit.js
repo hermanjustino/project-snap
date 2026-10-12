@@ -141,7 +141,13 @@ router.post("/city-match", upload.single("photo"), async (req, res) => {
       return res.status(502).json({ error: "Couldn't score the cities — try again." });
     }
 
-    res.json({ matches, verdict: result.verdict });
+    // Short labels for the pieces in the outfit (the reveal video tags them).
+    const items = (Array.isArray(result.items) ? result.items : [])
+      .filter((item) => typeof item === "string" && item.trim())
+      .map((item) => item.trim().slice(0, 24))
+      .slice(0, 4);
+
+    res.json({ matches, verdict: result.verdict, items });
   } catch (err) {
     console.error("[outfit] city-match failed:", err);
     res.status(500).json({ error: "Failed to match your fit to a city", detail: String(err.message || err) });

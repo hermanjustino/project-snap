@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>fitd</title>
+  <meta name="description" content="Where your fit fits in. Take a Fit Check and find the city that matches your outfit." />
+  <meta property="og:title" content="What city is your fit?" />
+  <meta property="og:description" content="Take a Fit Check on fitd and find the city that matches your outfit. No sign-up." />
+  <meta property="og:url" content="https://thefitd.com" />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=Bodoni+Moda:ital,opsz,wght@0,6..96,700;1,6..96,500&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet" />
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -27,9 +35,11 @@
     header * { pointer-events: auto; }
     header h1 {
       margin: 0;
-      font-size: 1.15rem;
-      letter-spacing: 0.02em;
-      color: #4a4130;
+      font-family: "Bodoni Moda", Georgia, serif;
+      font-size: 1.45rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #2b241a;
     }
     header p {
       margin: 0.2rem 0 0;
@@ -171,6 +181,123 @@
       font-weight: 600;
       cursor: pointer;
     }
+
+    /* Challenge: a friend's result next to yours (or an empty slot). */
+    .challenge-headline {
+      margin: 0.25rem 0 0.9rem;
+      font-family: "Bodoni Moda", Georgia, serif;
+      font-size: 1.6rem;
+      line-height: 1.12;
+      color: #2b241a;
+    }
+    .match-headline { font-family: "Bodoni Moda", Georgia, serif; }
+    .match-pct { font-family: "Archivo", system-ui, sans-serif; }
+    .vs-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0.6rem 0 0.8rem; }
+    .vs-tile {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 0.1rem;
+      min-height: 8.5rem;
+      padding: 0.75rem;
+      border-radius: 14px;
+      background: #2b241a;
+      background-size: cover;
+      background-position: center;
+      color: #f4ecda;
+    }
+    .vs-who { font: 600 0.65rem "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.8; }
+    .vs-pct { font: 800 1.9rem/1 "Archivo", system-ui, sans-serif; }
+    .vs-city { font: 700 1.1rem/1.1 "Bodoni Moda", Georgia, serif; }
+    .vs-empty {
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 2px dashed #b9a988;
+      color: #8a7a62;
+      font: 600 0.8rem "JetBrains Mono", ui-monospace, monospace;
+    }
+    .match-actions-stack { flex-direction: column; align-items: stretch; }
+    .match-actions-stack .share-fit-btn { flex: none; }
+    .match-note { margin: 0 !important; font-size: 0.75rem; color: #8c7f63; text-align: center; }
+
+    /* Share sheet: a 9:16 preview of the Story, the formats under it. */
+    #shareSheet[hidden] { display: none; }
+    #shareSheet {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+      padding: calc(3.75rem + env(safe-area-inset-top)) 1rem calc(1rem + env(safe-area-inset-bottom));
+      background: rgba(35, 30, 20, 0.94);
+      color: #f4ecda;
+      overflow-y: auto;
+    }
+    #shareSheet .lightbox-close { position: fixed; z-index: 2; }
+    #sharePreview {
+      flex-shrink: 0;
+      height: min(56dvh, calc((100vw - 2rem) * 16 / 9));
+      aspect-ratio: 9 / 16;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #2b241a;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      touch-action: pan-y;
+      user-select: none;
+    }
+    #sharePreview > * { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .share-formats {
+      display: flex;
+      gap: 0.2rem;
+      padding: 0.2rem;
+      border-radius: 999px;
+      background: rgba(244, 236, 218, 0.12);
+    }
+    .share-formats button {
+      padding: 0.45rem 0.9rem;
+      border: none;
+      border-radius: 999px;
+      background: none;
+      color: #f4ecda;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .share-formats button[aria-selected="true"] { background: #f4ecda; color: #2b241a; }
+    .share-name {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      width: min(360px, 100%);
+      font-size: 0.75rem;
+      color: #c9b894;
+    }
+    .share-name[hidden] { display: none; }
+    .share-name input {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid rgba(244, 236, 218, 0.25);
+      border-radius: 10px;
+      background: rgba(244, 236, 218, 0.08);
+      color: #f4ecda;
+      font-size: 1rem; /* 16px+ stops iOS zooming into the field */
+    }
+    .share-buttons { display: flex; gap: 0.5rem; width: min(360px, 100%); }
+    .share-buttons .share-fit-btn { flex: 1.3; margin: 0; }
+    .share-buttons .retry-btn {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1px solid rgba(244, 236, 218, 0.3);
+      border-radius: 999px;
+      background: none;
+      color: #f4ecda;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #shareStatus { min-height: 1.2em; margin: 0; font-size: 0.8rem; color: #c9b894; text-align: center; }
 
     .progress { display: flex; align-items: center; gap: 0.75rem; text-align: left; }
     .progress p { margin: 0 !important; }
@@ -368,7 +495,21 @@
     /* Mirror the live preview like a phone's selfie camera, so moving right
        moves right on screen. The captured photo is drawn from the raw stream,
        so it stays un-mirrored and logos/text on clothes read correctly. */
-    #fitCheckPublisher video { transform: scaleX(-1); }
+    #fitCheckPublisher.mirrored video { transform: scaleX(-1); }
+    #fitCheckControls { display: flex; align-items: center; gap: 0.5rem; }
+    .camera-flip {
+      padding: 0.6rem 0.9rem;
+      border: none;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      color: #f8f2e2;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .camera-flip[hidden] { display: none; }
     #fitCheckActions { display: flex; flex-direction: column; align-items: center; gap: 0.7rem; }
     #fitCheckCapture {
       padding: 0.85rem 1.6rem;
@@ -519,13 +660,31 @@
     <div id="fitCheckFlash" aria-hidden="true"></div>
     <div id="fitCheckResult" hidden></div>
     <div id="fitCheckActions">
-      <div class="timer-toggle" role="radiogroup" aria-label="Timer">
-        <button role="radio" data-timer="0" aria-checked="true">Now</button>
-        <button role="radio" data-timer="3" aria-checked="false">3s</button>
-        <button role="radio" data-timer="5" aria-checked="false">5s</button>
+      <div id="fitCheckControls">
+        <div class="timer-toggle" role="radiogroup" aria-label="Timer">
+          <button role="radio" data-timer="0" aria-checked="true">Now</button>
+          <button role="radio" data-timer="3" aria-checked="false">3s</button>
+          <button role="radio" data-timer="5" aria-checked="false">5s</button>
+        </div>
+        <button id="fitCheckFlip" class="camera-flip" aria-label="Switch between front and back camera" hidden>Flip</button>
       </div>
       <button id="fitCheckCapture">Capture &amp; Score</button>
     </div>
+  </div>
+
+  <div id="shareSheet" role="dialog" aria-modal="true" aria-label="Share your result" hidden>
+    <button class="lightbox-close" data-action="close" aria-label="Close">×</button>
+    <div id="sharePreview"></div>
+    <div id="shareFormats" class="share-formats" role="tablist" aria-label="Format"></div>
+    <label class="share-name">
+      Your name on the challenge link (optional)
+      <input id="shareName" maxlength="20" autocomplete="given-name" placeholder="First name" />
+    </label>
+    <div class="share-buttons">
+      <button id="shareGo" class="share-fit-btn">Share</button>
+      <button id="shareCopy" class="retry-btn">Copy link</button>
+    </div>
+    <p id="shareStatus" aria-live="polite"></p>
   </div>
 
   <div class="controls">

@@ -146,6 +146,16 @@
           <ul class="bars" id="devices"></ul>
         </section>
         <section class="card">
+          <h2>What people share</h2>
+          <p class="sub">Shares by format.</p>
+          <ul class="bars" id="shareFormats"></ul>
+        </section>
+        <section class="card">
+          <h2>Challenge links</h2>
+          <p class="sub">Friends who opened a shared link, and how many then checked their own fit.</p>
+          <ul class="bars" id="challenges"></ul>
+        </section>
+        <section class="card">
           <h2>Camera timer</h2>
           <p class="sub">Photos taken with each timer setting.</p>
           <ul class="bars" id="timers"></ul>
@@ -266,6 +276,17 @@
       renderBars("cityOpens", ranked(sumMaps(days, "cityOpens"), city));
       renderBars("referrers", ranked(sumMaps(days, "referrers"), (k) => (k === "direct" ? "Direct / unknown" : k)));
       renderBars("devices", ranked(sumMaps(days, "devices"), (k) => k[0].toUpperCase() + k.slice(1)));
+      const formatNames = { photo: "Photo card", stamp: "Passport stamp", minimal: "Minimal card", video: "Reveal video", link: "Copied link" };
+      renderBars("shareFormats", ranked(sumMaps(days, "shareFormats"), (k) => formatNames[k] || k));
+      const challengesOpened = sum(days, (d) => ev(d, "challenge_opened"));
+      renderBars(
+        "challenges",
+        [
+          ["Opened a link", challengesOpened],
+          ["Checked their fit", sum(days, (d) => ev(d, "challenge_completed"))],
+        ],
+        challengesOpened
+      );
       renderBars("timers", ranked(sumMaps(days, "timers"), (k) => (k === "0s" ? "No timer" : `${k.replace("s", "")}-second timer`)));
 
       $("dailyTable").innerHTML = [...days]

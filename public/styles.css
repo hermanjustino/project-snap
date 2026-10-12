@@ -159,3 +159,46 @@ label.upload input { display: none; }
   gap: 1rem;
 }
 #publisher, #subscribers { background: #000; border: 1px solid var(--border); border-radius: 12px; min-height: 260px; }
+
+/* Fit passport: a stamp for every city a Fit Check has matched. */
+.passport {
+  background: #2b241a;
+  border-color: #2b241a;
+  color: #f4ecda;
+}
+.passport h2 {
+  margin: 0;
+  font-family: "Bodoni Moda", Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.passport-summary {
+  margin: 0.3rem 0 1.1rem;
+  font: 600 0.75rem "JetBrains Mono", ui-monospace, monospace;
+  color: #c9b894;
+}
+.passport-summary a { color: #e0a48f; }
+.stamps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 0.9rem;
+}
+.stamp {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.5rem;
+  border: 2px solid currentColor;
+  border-radius: 10px;
+  text-align: center;
+  transform: rotate(var(--tilt, 0deg));
+}
+.stamp.round { border-radius: 50%; box-shadow: inset 0 0 0 5px #2b241a, inset 0 0 0 6px currentColor; }
+.stamp strong { font: 800 0.78rem/1.1 "Archivo", system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+.stamp span { font: 600 0.58rem "JetBrains Mono", ui-monospace, monospace; }
+.stamp.locked { border-style: dashed; color: #5a4e3e; }
+.stamp.locked span { font-size: 0.65rem; color: #7a6c56; }
+.passport-more { margin: 1rem 0 0; font: 600 0.7rem "JetBrains Mono", ui-monospace, monospace; color: #7a6c56; }

@@ -22,6 +22,7 @@ const CITY_IDS = new Set(
 const PAGES = new Set(["/", "/closet.html"]);
 const MODES = new Set(["city-match", "city"]);
 const TIMERS = new Set([0, 3, 5]);
+const SHARE_FORMATS = new Set(["photo", "stamp", "minimal", "video", "link"]);
 const OWN_HOSTS = /(^|\.)thefitd\.com$|\.run\.app$|^localhost$|^127\.0\.0\.1$/;
 const BOTS = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|curl|wget|python|httpclient|monitor/i;
 
@@ -77,9 +78,18 @@ export function countersFor(event, props = {}) {
       const city = cityOrNull(props.city);
       return city && { events: { fit_check_result: 1 }, cityFitChecks: { [city]: 1 } };
     }
-    case "share_tapped":
+    case "share_tapped": {
       if (!MODES.has(props.mode)) return null;
-      return { events: { share_tapped: 1 } };
+      const counters = { events: { share_tapped: 1 } };
+      if (SHARE_FORMATS.has(props.format)) counters.shareFormats = { [props.format]: 1 };
+      return counters;
+    }
+    case "challenge_opened":
+    case "challenge_completed": {
+      // Someone opened a friend's challenge link / did their own check from it.
+      const city = cityOrNull(props.city);
+      return city && { events: { [event]: 1 } };
+    }
     case "city_opened": {
       const city = cityOrNull(props.city);
       return city && { events: { city_opened: 1 }, cityOpens: { [city]: 1 } };

@@ -195,7 +195,8 @@ Return ONLY a JSON object (no prose, no markdown fences):
       "reasoning": "1-2 sentences on what in the outfit matches this city"
     }
   ],
-  "verdict": "a short punchy one-liner about the best match, e.g. 'Straight off a Shibuya crossing'"
+  "verdict": "a short punchy one-liner about the best match, e.g. 'Straight off a Shibuya crossing'",
+  "items": ["2-4 key pieces in the outfit, 1-3 words each, top to bottom, e.g. 'beanie', 'plaid flannel'"]
 }
 Include every city exactly once, best match first.
 
