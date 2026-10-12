@@ -589,6 +589,32 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
+// Without a requested size, browsers open the camera at a low default
+// (often 640x480), which looks blurry stretched across a phone screen. Ask for
+// up to 4K; the browser picks the closest mode the front camera supports.
+const CAMERA_CONSTRAINTS = {
+  audio: false,
+  video: {
+    facingMode: "user",
+    width: { ideal: 3840 },
+    height: { ideal: 2160 },
+    frameRate: { ideal: 30 },
+  },
+};
+
+// Keep focus and exposure adjusting as people step back for a full-length
+// shot, on cameras that let the page control them (mostly Android Chrome;
+// iPhones do this automatically).
+function enableContinuousAutoAdjust(stream) {
+  const [videoTrack] = stream.getVideoTracks();
+  const capabilities = videoTrack?.getCapabilities?.() ?? {};
+  const wanted = {};
+  if (capabilities.focusMode?.includes("continuous")) wanted.focusMode = "continuous";
+  if (capabilities.exposureMode?.includes("continuous")) wanted.exposureMode = "continuous";
+  if (capabilities.whiteBalanceMode?.includes("continuous")) wanted.whiteBalanceMode = "continuous";
+  if (Object.keys(wanted).length) videoTrack.applyConstraints({ advanced: [wanted] }).catch(() => {});
+}
+
 // Opens the full-screen camera. `context` says what the capture is scored
 // against: { city, year } or { mode: "city-match" }.
 async function openCamera(title, context) {
@@ -604,7 +630,8 @@ async function openCamera(title, context) {
   cityMatchCard.hidden = true;
 
   try {
-    fitCheckStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    fitCheckStream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+    enableContinuousAutoAdjust(fitCheckStream);
 
     const videoEl = document.createElement("video");
     videoEl.autoplay = true;
@@ -746,6 +773,23 @@ fitCheckCaptureBtn.addEventListener("click", () => {
   else captureAndScore();
 });
 
+// The photo is taken from the camera's full-resolution frame, then scaled
+// down to at most 1600px on its long side: still sharper than anything Gemini
+// or the 1080px share card uses, without uploading a 4K image over mobile data.
+const PHOTO_MAX_EDGE = 1600;
+
+function captureFrame(videoEl) {
+  const { videoWidth: w, videoHeight: h } = videoEl;
+  const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
+
 async function captureAndScore() {
   const videoEl = fitCheckPublisherEl.querySelector("video");
   if (!videoEl?.videoWidth) return; // camera closed or stopped mid-countdown
@@ -753,11 +797,7 @@ async function captureAndScore() {
   const mode = fitCheckContext.mode === "city-match" ? "city-match" : "city";
   track("photo_captured", { mode, timer: captureTimer });
 
-  const canvas = document.createElement("canvas");
-  canvas.width = videoEl.videoWidth || 640;
-  canvas.height = videoEl.videoHeight || 480;
-  canvas.getContext("2d").drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-  const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  const photoDataUrl = captureFrame(videoEl);
 
   fitCheckResultEl.hidden = false;
   lastFitResult = null;
