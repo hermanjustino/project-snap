@@ -7,6 +7,7 @@ import { SKELETON, loadLand, paintSurface } from "./land.js";
 import { openShareSheet } from "./share-sheet.js";
 import { passportSummary, stampPassport } from "./passport.js";
 import { clearChallengeFromUrl, readChallenge } from "./challenge.js";
+import { formatScore } from "./score.js";
 
 const GLOBE_RADIUS = 80;
 const MARKER_COLOR = "#a8452b";
@@ -793,7 +794,7 @@ async function captureAndScore() {
     const closest = closestStyle ? `<p class="fit-closest">Closest to ${city} ${closestStyle.toLowerCase()}</p>` : "";
     fitCheckResultEl.innerHTML = `
       <div class="fit-score-badge" style="background: ${scoreGradient(fitScore)}">
-        <span class="fit-score-num">${fitScore}</span><span class="fit-score-max">/100</span>
+        <span class="fit-score-num">${formatScore(fitScore)}</span><span class="fit-score-max">/10</span>
       </div>
       <h4 class="fit-verdict" style="color: ${accent}">${verdict}</h4>
       ${closest}
@@ -870,13 +871,13 @@ function vsTilesHtml(mine) {
   const c = activeChallenge;
   const theirs = `<div class="vs-tile">
       <span class="vs-who">${escapeHtml(c.name || "Your friend")}</span>
-      <span class="vs-pct" style="color: ${scoreAccent(c.pct)}">${c.pct}%</span>
+      <span class="vs-pct" style="color: ${scoreAccent(c.pct)}">${formatScore(c.pct)}<small>/10</small></span>
       <span class="vs-city">${escapeHtml(c.city)}</span>
     </div>`;
   const yours = mine
     ? `<div class="vs-tile vs-mine" style="background-image: linear-gradient(rgba(43,36,26,0.15), rgba(43,36,26,0.7)), url('${mine.photoDataUrl}')">
         <span class="vs-who">You</span>
-        <span class="vs-pct" style="color: #fff">${mine.pct}%</span>
+        <span class="vs-pct" style="color: #fff">${formatScore(mine.pct)}<small>/10</small></span>
         <span class="vs-city">${escapeHtml(mine.city)}</span>
       </div>`
     : `<div class="vs-tile vs-empty">you?</div>`;
@@ -893,7 +894,7 @@ function showChallenge() {
     <div class="match-body">
       <button class="popup-close" data-action="close" aria-label="Close">×</button>
       <p class="match-eyebrow">${c.name ? `${escapeHtml(c.name)} challenged you` : "You've been challenged"}</p>
-      <h2 class="challenge-headline">${who} fit is ${c.pct}% ${escapeHtml(c.city)}. What's yours?</h2>
+      <h2 class="challenge-headline">${who} fit scored ${formatScore(c.pct)}/10 for ${escapeHtml(c.city)}. What's yours?</h2>
       ${vsTilesHtml(null)}
     </div>
     <div class="match-actions match-actions-stack">
@@ -934,9 +935,9 @@ function showCityMatch(data, photoDataUrl) {
   cityMatchCard.innerHTML = `
     <div class="match-body">
     <button class="popup-close" data-action="close" aria-label="Close">×</button>
-    <p class="match-eyebrow">Your fit is</p>
+    <p class="match-eyebrow">Your city match</p>
     <h2 class="match-headline">
-      <span class="match-pct" style="color: ${scoreAccent(best.matchPercent)}">${best.matchPercent}%</span> ${best.city}
+      <span class="match-pct" style="color: ${scoreAccent(best.matchPercent)}">${formatScore(best.matchPercent)}<small class="match-out-of">/10</small></span> ${best.city}
     </h2>
     ${activeChallenge ? vsTilesHtml(lastFitResult) : ""}
     <p class="fit-closest">Closest to ${best.city} ${String(best.closestStyle).toLowerCase()}</p>
@@ -952,7 +953,7 @@ function showCityMatch(data, photoDataUrl) {
                  (m) => `<li><button data-action="explore" data-city="${m.id}">
                    <span class="runner-name">${m.city}</span>
                    <span class="runner-bar"><span style="width: ${m.matchPercent}%"></span></span>
-                   <span class="runner-pct">${m.matchPercent}%</span>
+                   <span class="runner-pct">${formatScore(m.matchPercent)}</span>
                  </button></li>`
                )
                .join("")}

@@ -10,6 +10,7 @@
 // `fit` is { photoDataUrl, pct, accent, city, lat, lng, style, verdict,
 // items[], challenge: { name, pct, city } | null, stamp: { count } | null }.
 import { SKELETON, loadLand, paintSurface } from "./land.js";
+import { formatScore } from "./score.js";
 
 const W = 1080;
 const H = 1920;
@@ -137,18 +138,46 @@ function styleLine(fit) {
 
 function challengeLine(fit) {
   const c = fit.challenge;
-  return c ? `vs ${c.name || "a friend"}: ${c.pct}% ${c.city}` : "";
+  return c ? `vs ${c.name || "a friend"}: ${formatScore(c.pct)}/10 ${c.city}` : "";
 }
 
-// "88% Toronto" on one baseline, shrunk together to fit `width`.
+// A score as a big "8.5" with a smaller "/10" after it, on one baseline.
+// Returns the drawn width; with `measureOnly` it only measures.
+function drawScore(ctx, text, x, y, size, color, { measureOnly = false } = {}) {
+  setFont(ctx, `800 ${size}px ${SANS}`, -2);
+  const mainW = ctx.measureText(text).width;
+  setFont(ctx, `700 ${size * 0.4}px ${SANS}`);
+  const outOfW = ctx.measureText("/10").width + size * 0.05;
+  if (!measureOnly) {
+    const align = ctx.textAlign;
+    ctx.textAlign = "left";
+    ctx.fillStyle = color;
+    setFont(ctx, `800 ${size}px ${SANS}`, -2);
+    ctx.fillText(text, x, y);
+    setFont(ctx, `700 ${size * 0.4}px ${SANS}`);
+    ctx.globalAlpha *= 0.7;
+    ctx.fillText("/10", x + mainW + size * 0.05, y);
+    ctx.globalAlpha /= 0.7;
+    ctx.textAlign = align;
+  }
+  return mainW + outOfW;
+}
+
+// Same, centered on `cx`.
+function drawScoreCentered(ctx, text, cx, y, size, color) {
+  const w = drawScore(ctx, text, 0, 0, size, color, { measureOnly: true });
+  drawScore(ctx, text, cx - w / 2, y, size, color);
+}
+
+// "8.5/10 Toronto" on one baseline, shrunk together to fit `width`.
 function drawPctCity(ctx, fit, { x, y, width, pctSize, citySize, align = "left", cityColor = INK }) {
+  const score = formatScore(fit.pct);
   let scale = 1;
   const measure = () => {
-    setFont(ctx, `800 ${pctSize * scale}px ${SANS}`, -2);
-    const pctW = ctx.measureText(`${fit.pct}%`).width;
+    const pctW = drawScore(ctx, score, 0, 0, pctSize * scale, fit.accent, { measureOnly: true });
     setFont(ctx, `700 ${citySize * scale}px ${SERIF}`);
     const cityW = ctx.measureText(fit.city).width;
-    return { pctW, cityW, gap: 22 * scale };
+    return { pctW, cityW, gap: 26 * scale };
   };
   let m = measure();
   while (m.pctW + m.gap + m.cityW > width && scale > 0.4) {
@@ -159,9 +188,7 @@ function drawPctCity(ctx, fit, { x, y, width, pctSize, citySize, align = "left",
   const startX = align === "center" ? x - total / 2 : x;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  setFont(ctx, `800 ${pctSize * scale}px ${SANS}`, -2);
-  ctx.fillStyle = fit.accent;
-  ctx.fillText(`${fit.pct}%`, startX, y);
+  drawScore(ctx, score, startX, y, pctSize * scale, fit.accent);
   setFont(ctx, `700 ${citySize * scale}px ${SERIF}`);
   ctx.fillStyle = cityColor;
   ctx.fillText(fit.city, startX + m.pctW + m.gap, y);
@@ -221,7 +248,7 @@ function drawPhotoCard(ctx, fit, photo) {
   ctx.fillStyle = MUTED;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("MY FIT IS", x + pad, y);
+  ctx.fillText("MY CITY MATCH", x + pad, y);
   y += 30 + 108;
   drawPctCity(ctx, fit, { x: x + pad, y, width: w - pad * 2, pctSize: 116, citySize: 100 });
   if (detail) {
@@ -266,7 +293,7 @@ function drawStamp(ctx, fit, { cx, cy, r, rotation }) {
   setFont(ctx, `800 ${size}px ${SANS}`, 2);
   ctx.fillText(city, 0, 20);
   setFont(ctx, `600 30px ${MONO}`, 3);
-  ctx.fillText(`${fit.pct}% MATCH`, 0, -58);
+  ctx.fillText(`${formatScore(fit.pct)}/10 MATCH`, 0, -58);
   const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
   setFont(ctx, `600 24px ${MONO}`, 2);
   ctx.fillText(date, 0, 72);
@@ -313,11 +340,9 @@ function drawMinimalCard(ctx, fit) {
   ctx.textBaseline = "alphabetic";
   setFont(ctx, `600 32px ${MONO}`, 8);
   ctx.fillStyle = MUTED;
-  ctx.fillText("MY FIT IS", W / 2, 640);
+  ctx.fillText("MY CITY MATCH", W / 2, 640);
 
-  setFont(ctx, `800 300px ${SANS}`, -8);
-  ctx.fillStyle = fit.accent;
-  ctx.fillText(`${fit.pct}%`, W / 2, 930);
+  drawScoreCentered(ctx, formatScore(fit.pct), W / 2, 930, 300, fit.accent);
 
   const citySize = fitFontSize(ctx, fit.city, (s) => `700 ${s}px ${SERIF}`, 170, W - 160);
   setFont(ctx, `700 ${citySize}px ${SERIF}`);
@@ -636,19 +661,17 @@ function drawRevealScene(ctx, fit, photo, t) {
   ctx.restore();
 
   const countP = easeOut((t - T_REVEAL) / (T_CITY - T_REVEAL));
-  const shown = Math.round(fit.pct * countP);
+  const shown = formatScore(Math.round(fit.pct * countP));
   const top = SAFE_TOP + ph + 150;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   setFont(ctx, `600 30px ${MONO}`, 8);
   ctx.fillStyle = MUTED;
-  ctx.fillText("MY FIT IS", W / 2, top);
+  ctx.fillText("MY CITY MATCH", W / 2, top);
 
   const cityIn = easeOut((t - T_CITY) / 0.5);
   if (cityIn <= 0) {
-    setFont(ctx, `800 230px ${SANS}`, -6);
-    ctx.fillStyle = fit.accent;
-    ctx.fillText(`${shown}%`, W / 2, top + 230);
+    drawScoreCentered(ctx, shown, W / 2, top + 230, 230, fit.accent);
   } else {
     ctx.save();
     const pop = 1 + 0.08 * Math.sin(Math.PI * clamp01((t - T_CITY) / 0.35));

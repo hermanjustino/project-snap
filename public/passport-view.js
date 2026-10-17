@@ -1,6 +1,7 @@
 // Shows the fit passport on the My Closet page: a stamp for each city a Fit
 // Check has matched, and a locked one for each city still to collect.
 import { passportSummary } from "./passport.js";
+import { formatScore } from "./score.js";
 
 const COLORS = ["#e0a48f", "#c9b894", "#9cc7a8", "#d8b46a", "#b9a8d6"];
 const el = document.getElementById("passport");
@@ -28,7 +29,7 @@ el.querySelector(".stamps").innerHTML = [
     const { color, round, tilt } = looks(id);
     return `<div class="stamp${round ? " round" : ""}" style="color: ${color}; --tilt: ${tilt}deg">
       <strong>${label(id)}</strong>
-      <span>×${s.count} · best ${s.best}%</span>
+      <span>×${s.count} · best ${formatScore(s.best)}</span>
     </div>`;
   }),
   ...locked.slice(0, SHOW_LOCKED).map(({ id }) => {

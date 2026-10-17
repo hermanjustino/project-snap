@@ -1,6 +1,7 @@
 // The share sheet: pick a Story format (three still cards or The Reveal
 // video), preview it full size, and share it with a challenge link.
 import { track } from "./track.js";
+import { formatScore } from "./score.js";
 import { STORY_STYLES, buildStoryCard, canRecordVideo, recordReveal } from "./share.js";
 import { SITE_URL, challengeUrl, cleanName, saveName, savedName } from "./challenge.js";
 
@@ -41,8 +42,8 @@ function shareLink() {
 
 function shareText() {
   return isChallenge()
-    ? `My fit is ${fit.pct}% ${fit.city}. What city is yours? ${shareLink()}`
-    : `My fit scored ${fit.pct}/100 for ${fit.city}. Check yours at ${shareLink()}`;
+    ? `My fit scored ${formatScore(fit.pct)}/10 for ${fit.city}. What city is yours? ${shareLink()}`
+    : `My ${fit.city} fit check: ${formatScore(fit.pct)}/10. Check yours at ${shareLink()}`;
 }
 
 function setStatus(text) {
